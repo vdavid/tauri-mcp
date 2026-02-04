@@ -1,34 +1,72 @@
-# Cmdr
+# tauri-mcp
 
-`tauri-mcp` is a Model Context Protocol (MCP) server that enables AI assistants to inspect, debug, and automate Tauri v2 applications. It provides screenshots, DOM inspection, JavaScript execution, and UI interaction capabilities.
+MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect, debug, and automate Tauri applications.
 
-## Common tasks and reminders
+## Project status
 
-- Adding new dependencies: NEVER rely on your training data! ALWAYS use pnpm/ncu, or another source to find the latest
-  versions of libraries. Check out their GitHub, too, and see if they are active. Check Google/Reddit for the latest
-  best solutions!
-- ALWAYS read the [full style guide](docs/style-guide.md) before touching the repo!
-- Always cover your code with tests until you're confident in your implementation, but don't add excessive tests!
+**Milestone 1 complete.** The project structure and Rust plugin skeleton are in place. All quality checks pass.
+
+### What's implemented
+- WebSocket server skeleton (`packages/plugin/src/websocket.rs`)
+- Command dispatch for all 9 tools (`packages/plugin/src/commands/`)
+- Screenshot: macOS returns placeholder PNG, Windows/Linux return "not implemented"
+- JS execution: Calls `window.eval()` but doesn't return results yet (TODO)
+- Console capture: Injection script works, retrieval implemented
+- DOM snapshot, interact, wait-for: JS scripts exist, wired to commands
+- Window management: list/info/resize using Tauri APIs
+
+### What needs work (Milestones 2-15)
+See [tasks.md](tasks.md) for the full list. Key items:
+- **Milestone 3**: Real macOS screenshot via `WKWebView.takeSnapshot` (objc2)
+- **Milestone 4**: Proper JS result retrieval (current impl just returns "Script executed")
+- **Milestone 10**: TypeScript MCP server (`packages/server/`)
+- **Milestone 11**: Test app frontend (Svelte todo list)
+
+## Before you code
+
+1. **Read [docs/style-guide.md](docs/style-guide.md)** - especially "Sentence case" and TypeScript rules
+2. **Read [spec.md](spec.md)** - full technical specification
+3. **Check latest dependency versions** - don't rely on training data
+
+## Quality checks
+
+**Run before every commit:**
+```bash
+./scripts/check-all.sh
+```
+
+This runs: rustfmt, clippy, cargo test, cargo-audit, cargo-deny, cargo-udeps, jscpd (if installed)
+
+All checks must pass before committing.
+
+## Key files
+
+| File | Purpose |
+|------|---------|
+| `packages/plugin/src/lib.rs` | Plugin entry point, Builder pattern |
+| `packages/plugin/src/websocket.rs` | WebSocket server, request/response handling |
+| `packages/plugin/src/commands/mod.rs` | Command dispatch |
+| `packages/plugin/src/screenshot/macos.rs` | macOS screenshot (needs real implementation) |
+| `packages/plugin/src/commands/execute_js.rs` | JS execution (needs result retrieval) |
+| `deny.toml` | Security/license config (gtk3-rs advisories ignored) |
+
+## Commit guidelines
+
+- 50 char first line + bullets for details
+- No `Co-authored-by`
+- Run `./scripts/check-all.sh` before committing
+- Commit after each milestone
 
 ## Things to avoid
 
-- ❌ Don't use classes in TypeScript (use functional components/modules)
-- ❌ Don't add JSDoc that just repeats types or obvious function names
-- ❌ Don't use `any` type (ESLint will error)
-- ❌ Don't ignore linter warnings (fix them or justify with a comment)
+- ❌ Classes in TypeScript (use functional)
+- ❌ JSDoc that repeats types
+- ❌ `any` type
+- ❌ Ignoring linter warnings
+- ❌ Adding features beyond what's requested
 
-## Development
+## References
 
-Always do a last round of checks before wrapping up each milestone:
-
-1. Run ALL of rustfmt, clippy, cargo-audit, cargo-deny, cargo-udeps, jscpd, and tests via some convenience script!
-2. Commit at least after each milestone! Use atomic commits, 50char+bullets, no Co-authored-by!
-3. Looking back at this work, do you think this will be convenient to maintain this later?
-4. Will this lead to superb UX for the end-user AI agent, without overloading its context?
-5. Is this as fast as possible?
-
-## Useful references
-
-- [Style guide](docs/style-guide.md) - Keep this in mind! Especially "Sentence case" for titles and labels!
-
-Happy coding! 🦀✨
+- [spec.md](spec.md) - Technical specification
+- [tasks.md](tasks.md) - Implementation checklist
+- [docs/style-guide.md](docs/style-guide.md) - Code style rules
