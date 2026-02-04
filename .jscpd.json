@@ -1,0 +1,19 @@
+{
+  "threshold": 5,
+  "reporters": ["console"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/target/**",
+    "**/dist/**",
+    "**/.git/**",
+    "**/related-repos/**",
+    "**/*.lock",
+    "**/LICENSE*"
+  ],
+  "format": ["rust", "typescript", "javascript"],
+  "absolute": false,
+  "gitignore": true,
+  "minLines": 5,
+  "minTokens": 50,
+  "output": "./reports"
+}

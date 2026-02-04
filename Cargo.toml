@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["packages/plugin", "packages/test-app/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.77"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/vdavid/tauri-mcp"
+authors = ["David Veszelovszki"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+cognitive_complexity = { level = "warn", priority = 1 }
+unwrap_used = "warn"
+expect_used = "warn"

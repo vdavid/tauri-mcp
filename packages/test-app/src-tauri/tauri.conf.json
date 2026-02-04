@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "tauri-mcp-test",
+  "version": "0.1.0",
+  "identifier": "com.vdavid.tauri-mcp-test",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "tauri-mcp test",
+        "label": "main",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": []
+  }
+}
