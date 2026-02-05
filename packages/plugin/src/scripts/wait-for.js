@@ -5,11 +5,11 @@ window.__tauriMcpWaitFor = async function(args) {
   const { type, value, timeout = 5000 } = args;
 
   if (!type) {
-    return { error: "Missing 'type' argument. Use 'selector', 'text', 'visible', or 'hidden'." };
+    throw new Error("Missing 'type' argument. Use 'selector', 'text', 'visible', or 'hidden'.");
   }
 
   if (!value) {
-    return { error: "Missing 'value' argument." };
+    throw new Error("Missing 'value' argument.");
   }
 
   const startTime = Date.now();
@@ -21,14 +21,12 @@ window.__tauriMcpWaitFor = async function(args) {
       return { success: true, message: result.message };
     }
     if (result.error) {
-      return { error: result.error };
+      throw new Error(result.error);
     }
     await sleep(pollInterval);
   }
 
-  return {
-    error: getTimeoutMessage(type, value, timeout)
-  };
+  throw new Error(getTimeoutMessage(type, value, timeout));
 
   function getTimeoutMessage(conditionType, conditionValue, timeoutMs) {
     switch (conditionType) {

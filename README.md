@@ -164,6 +164,10 @@ tauri_mcp::Builder::new()
     .build()
 ```
 
+### Security note
+
+By default, the WebSocket server binds to `localhost` only. If you use `.host("0.0.0.0")` to allow remote connections, be aware that **anyone on the network can execute arbitrary JavaScript** in your app. Only bind to 0.0.0.0 on trusted networks or behind a firewall.
+
 ## Platform support
 
 | Feature | macOS | Windows | Linux |

@@ -9,12 +9,12 @@ window.__tauriMcpInteract = function(args) {
   if (selector) {
     element = document.querySelector(selector);
     if (!element) {
-      return { error: `Element not found: ${selector}` };
+      throw new Error(`Element not found: ${selector}`);
     }
   } else if (x !== undefined && y !== undefined) {
     element = document.elementFromPoint(x, y);
     if (!element) {
-      return { error: `No element at coordinates (${x}, ${y})` };
+      throw new Error(`No element at coordinates (${x}, ${y})`);
     }
   }
 
@@ -32,27 +32,27 @@ window.__tauriMcpInteract = function(args) {
       return doScroll(element, scrollX, scrollY);
 
     default:
-      return { error: `Unknown action: ${action}. Use 'click', 'double_click', 'type', or 'scroll'.` };
+      throw new Error(`Unknown action: ${action}. Use 'click', 'double_click', 'type', or 'scroll'.`);
   }
 
   function doClick(el, clientX, clientY, isDouble) {
     if (!el) {
-      return { error: "No element specified for click. Provide 'selector' or 'x'/'y' coordinates." };
+      throw new Error("No element specified for click. Provide 'selector' or 'x'/'y' coordinates.");
     }
 
     // Check if element is visible and clickable
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) {
-      return { error: `Element is not visible (zero size): ${getElementDescription(el)}` };
+      throw new Error(`Element is not visible (zero size): ${getElementDescription(el)}`);
     }
 
     const style = window.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') {
-      return { error: `Element is hidden: ${getElementDescription(el)}` };
+      throw new Error(`Element is hidden: ${getElementDescription(el)}`);
     }
 
     if (style.pointerEvents === 'none') {
-      return { error: `Element has pointer-events: none: ${getElementDescription(el)}` };
+      throw new Error(`Element has pointer-events: none: ${getElementDescription(el)}`);
     }
 
     // Calculate click position
@@ -87,11 +87,11 @@ window.__tauriMcpInteract = function(args) {
 
   function doType(el, inputText) {
     if (!el) {
-      return { error: "No element specified for type. Provide 'selector'." };
+      throw new Error("No element specified for type. Provide 'selector'.");
     }
 
     if (!inputText) {
-      return { error: "Missing 'text' argument for type action." };
+      throw new Error("Missing 'text' argument for type action.");
     }
 
     // Check if element accepts input
@@ -99,22 +99,22 @@ window.__tauriMcpInteract = function(args) {
     const isContentEditable = el.contentEditable === 'true';
 
     if (!isInput && !isContentEditable) {
-      return { error: `Element does not accept text input: ${getElementDescription(el)}` };
+      throw new Error(`Element does not accept text input: ${getElementDescription(el)}`);
     }
 
     // Check if element is disabled or readonly
     if (el.disabled) {
-      return { error: `Element is disabled: ${getElementDescription(el)}` };
+      throw new Error(`Element is disabled: ${getElementDescription(el)}`);
     }
     if (el.readOnly) {
-      return { error: `Element is read-only: ${getElementDescription(el)}` };
+      throw new Error(`Element is read-only: ${getElementDescription(el)}`);
     }
 
     // Check for input types that don't accept text
     if (el.tagName === 'INPUT') {
       const nonTextTypes = ['checkbox', 'radio', 'file', 'submit', 'reset', 'button', 'image', 'hidden', 'range', 'color'];
       if (nonTextTypes.includes(el.type)) {
-        return { error: `Input type '${el.type}' does not accept text: ${getElementDescription(el)}` };
+        throw new Error(`Input type '${el.type}' does not accept text: ${getElementDescription(el)}`);
       }
     }
 
@@ -140,7 +140,7 @@ window.__tauriMcpInteract = function(args) {
     const target = el || document.documentElement;
 
     if (deltaX === undefined && deltaY === undefined) {
-      return { error: "Missing 'scrollX' or 'scrollY' argument for scroll action." };
+      throw new Error("Missing 'scrollX' or 'scrollY' argument for scroll action.");
     }
 
     target.scrollBy({

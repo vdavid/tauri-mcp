@@ -4,7 +4,7 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
 
   const root = selector ? document.querySelector(selector) : document.body;
   if (!root) {
-    return { error: `Element not found: ${selector}` };
+    throw new Error(`Element not found: ${selector}`);
   }
 
   if (type === 'accessibility') {
@@ -12,7 +12,7 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
   } else if (type === 'structure') {
     return captureStructureTree(root);
   } else {
-    return { error: `Unknown snapshot type: ${type}. Use 'accessibility' or 'structure'.` };
+    throw new Error(`Unknown snapshot type: ${type}. Use 'accessibility' or 'structure'.`);
   }
 
   function captureAccessibilityTree(element, depth = 0) {
