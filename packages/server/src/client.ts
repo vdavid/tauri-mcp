@@ -41,6 +41,7 @@ interface ClientState {
   reconnectAttempts: number;
   shouldReconnect: boolean;
   pingInterval: ReturnType<typeof setInterval> | null;
+  reconnectTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 // ============================================================================
@@ -115,8 +116,14 @@ const handleClose = (): void => {
     clientState.reconnectAttempts++;
     const delay = reconnectDelayMs * clientState.reconnectAttempts;
 
-    setTimeout(() => {
-      connect(clientState!.host, clientState!.port).catch(() => {
+    // Store host/port locally to avoid non-null assertion in callback
+    const { host, port } = clientState;
+    clientState.reconnectTimeout = setTimeout(() => {
+      // Check if disconnect was called while waiting
+      if (!clientState) return;
+
+      clientState.reconnectTimeout = null;
+      connect(host, port).catch(() => {
         // Reconnection failed silently
       });
     }, delay);
@@ -170,6 +177,7 @@ export const connect = async (
       reconnectAttempts: 0,
       shouldReconnect: true,
       pingInterval: null,
+      reconnectTimeout: null,
     };
 
     ws.on("open", () => {
@@ -196,6 +204,12 @@ export const disconnect = (): void => {
   if (!clientState) return;
 
   clientState.shouldReconnect = false;
+
+  // Cancel any pending reconnection timeout
+  if (clientState.reconnectTimeout) {
+    clearTimeout(clientState.reconnectTimeout);
+    clientState.reconnectTimeout = null;
+  }
 
   if (clientState.pingInterval) {
     clearInterval(clientState.pingInterval);
