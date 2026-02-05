@@ -1,4 +1,13 @@
-//! Command handlers for MCP requests
+//! Command handlers for MCP requests.
+//!
+//! Each command corresponds to a tool in the MCP server:
+//! - `screenshot` - Capture webview screenshot
+//! - `execute_js` - Run JavaScript in the webview
+//! - `console_logs` - Get captured console output
+//! - `dom_snapshot` - Get DOM tree as YAML
+//! - `interact` - Click, type, scroll
+//! - `wait_for` - Wait for conditions
+//! - `window_list` / `window_info` / `window_resize` - Window management
 
 mod execute_js;
 mod screenshot;
@@ -9,7 +18,9 @@ use tauri::{Manager, Runtime};
 
 use crate::websocket::{Request, WindowContext};
 
-/// Execute a command and return the result
+/// Route a request to the appropriate command handler.
+///
+/// Returns the result data and window context on success, or an error message.
 pub async fn execute<R: Runtime>(
     app: &tauri::AppHandle<R>,
     request: Request,

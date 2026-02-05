@@ -1,4 +1,6 @@
-//! WebSocket server for MCP communication
+//! WebSocket server for MCP communication.
+//!
+//! Handles JSON-RPC-like requests from the MCP server and routes them to command handlers.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -15,33 +17,47 @@ use tracing::{debug, error, info};
 
 use crate::commands;
 
-/// Request from MCP server to plugin
+/// Incoming request from the MCP server.
+///
+/// Uses a JSON-RPC-like format with an ID for request/response matching.
 #[derive(Debug, Deserialize)]
 pub struct Request {
+    /// Unique request identifier for response matching
     pub id: String,
+    /// Command name (`screenshot`, `execute_js`, `window_list`, etc.)
     pub command: String,
+    /// Command-specific arguments
     #[serde(default)]
     pub args: serde_json::Value,
 }
 
-/// Response from plugin to MCP server
+/// Response sent back to the MCP server.
 #[derive(Debug, Serialize)]
 pub struct Response {
+    /// Matches the request ID
     pub id: String,
+    /// Whether the command succeeded
     pub success: bool,
+    /// Command result (on success)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Value>,
+    /// Error message (on failure)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Info about the window that handled the request
     #[serde(skip_serializing_if = "Option::is_none", rename = "windowContext")]
     pub window_context: Option<WindowContext>,
 }
 
-/// Context about the window that handled the request
+/// Metadata about the window that handled the request.
+///
+/// Included in successful responses to help identify which window was used.
 #[derive(Debug, Serialize)]
 pub struct WindowContext {
+    /// Label of the window that handled the request
     #[serde(rename = "windowLabel")]
     pub window_label: String,
+    /// Total number of windows in the application
     #[serde(rename = "totalWindows")]
     pub total_windows: usize,
 }

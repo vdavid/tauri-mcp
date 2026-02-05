@@ -2,9 +2,11 @@
 
 A Tauri v2 plugin that enables AI assistants to inspect, debug, and automate Tauri applications through the Model Context Protocol (MCP).
 
+This plugin runs a WebSocket server inside your Tauri app that accepts commands for screenshots, JavaScript execution, DOM inspection, and UI interaction.
+
 ## Installation
 
-Add this to your `Cargo.toml`:
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -13,7 +15,9 @@ tauri-mcp = "0.1"
 
 ## Usage
 
-```rust,ignore
+Register the plugin in your `main.rs`:
+
+```rust
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_mcp::init())
@@ -24,13 +28,13 @@ fn main() {
 
 ### Custom configuration
 
-```rust,ignore
+```rust
 fn main() {
     tauri::Builder::default()
         .plugin(
             tauri_mcp::Builder::new()
-                .port(9224)
-                .host("0.0.0.0")  // Allow remote connections
+                .port(9224)              // Custom port (default: 9223)
+                .host("0.0.0.0")         // Allow remote connections (default: localhost)
                 .build()
         )
         .run(tauri::generate_context!())
@@ -42,24 +46,75 @@ fn main() {
 
 The plugin exposes a WebSocket server that accepts commands for:
 
-- **Screenshot**: Capture screenshots of the webview (macOS only for now)
-- **JavaScript execution**: Run arbitrary JS in the webview context
-- **Console logs**: Capture and retrieve console output
-- **DOM snapshot**: Get accessibility or structure tree of the page
-- **Window management**: List, inspect, and resize windows
-- **UI interaction**: Click, type, and scroll
-- **Wait conditions**: Wait for selectors, text, or visibility changes
+| Command | Description |
+|---------|-------------|
+| `screenshot` | Capture the webview as PNG or JPEG (macOS only) |
+| `execute_js` | Run JavaScript in the webview context |
+| `console_logs` | Get captured console output with filtering |
+| `dom_snapshot` | Get accessibility or structure tree of the DOM |
+| `window_list` | List all windows with labels and titles |
+| `window_info` | Get window size, position, and state |
+| `window_resize` | Resize a window to specific dimensions |
+| `interact` | Click, type, or scroll in the webview |
+| `wait_for` | Wait for selectors, text, or visibility changes |
+
+## WebSocket protocol
+
+Commands use a JSON-RPC-like format over WebSocket.
+
+### Request
+
+```json
+{
+  "id": "req_123",
+  "command": "screenshot",
+  "args": { "format": "png" }
+}
+```
+
+### Response
+
+```json
+{
+  "id": "req_123",
+  "success": true,
+  "data": "data:image/png;base64,...",
+  "windowContext": {
+    "windowLabel": "main",
+    "totalWindows": 1
+  }
+}
+```
+
+### Error response
+
+```json
+{
+  "id": "req_123",
+  "success": false,
+  "error": "Window 'settings' not found. Available: main, about"
+}
+```
 
 ## Configuration
 
 | Environment variable | Default | Description |
 |---------------------|---------|-------------|
 | `TAURI_MCP_PORT` | `9223` | WebSocket server port |
-| `TAURI_MCP_HOST` | `localhost` | WebSocket server host |
+| `TAURI_MCP_HOST` | `localhost` | WebSocket server bind address |
 
-## Protocol
+## Platform support
 
-The plugin uses a simple JSON-RPC-like protocol over WebSocket. See the [specification](../../spec.md) for details.
+| Feature | macOS | Windows | Linux |
+|---------|-------|---------|-------|
+| Screenshot | Yes | Stub | Stub |
+| All other commands | Yes | Yes | Yes |
+
+Screenshot capture uses `WKWebView.takeSnapshot` on macOS. Windows and Linux support will be added in a future release.
+
+## Using with the MCP server
+
+This plugin is designed to work with the `@vdavid/tauri-mcp` MCP server, which translates MCP tool calls into WebSocket commands. See the [main project README](../../README.md) for setup instructions.
 
 ## License
 

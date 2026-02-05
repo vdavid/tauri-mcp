@@ -2,8 +2,26 @@
 //!
 //! This plugin enables AI assistants to inspect, debug, and automate Tauri applications
 //! through the Model Context Protocol (MCP).
-
-#![doc = include_str!("../README.md")]
+//!
+//! # Quick start
+//!
+//! ```rust,ignore
+//! fn main() {
+//!     tauri::Builder::default()
+//!         .plugin(tauri_mcp::init())
+//!         .run(tauri::generate_context!())
+//!         .expect("error while running tauri application");
+//! }
+//! ```
+//!
+//! # Custom configuration
+//!
+//! ```rust,ignore
+//! tauri_mcp::Builder::new()
+//!     .port(9224)
+//!     .host("0.0.0.0")
+//!     .build()
+//! ```
 
 mod commands;
 mod screenshot;
@@ -19,7 +37,16 @@ pub const DEFAULT_PORT: u16 = 9223;
 /// Default WebSocket server host
 pub const DEFAULT_HOST: &str = "localhost";
 
-/// Plugin builder for customizing configuration
+/// Plugin builder for customizing WebSocket server configuration.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// tauri_mcp::Builder::new()
+///     .port(9224)          // Custom port
+///     .host("0.0.0.0")     // Allow remote connections
+///     .build()
+/// ```
 #[derive(Debug, Clone)]
 pub struct Builder {
     port: u16,
@@ -68,7 +95,9 @@ impl Builder {
     }
 }
 
-/// Initialize the plugin with default settings
+/// Initialize the plugin with default settings (localhost:9223).
+///
+/// Use [`Builder`] for custom configuration.
 #[must_use]
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new().build()
