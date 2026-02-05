@@ -30,6 +30,7 @@ mod websocket;
 use tauri::{plugin::TauriPlugin, Manager, RunEvent, Runtime};
 use tokio::sync::oneshot;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 pub use websocket::ShutdownHandle;
 
@@ -42,6 +43,9 @@ pub const DEFAULT_HOST: &str = "localhost";
 /// Default console log limit (protects against runaway scripts flooding logs)
 pub const DEFAULT_CONSOLE_LOG_LIMIT: u32 = 25;
 
+/// Default log level
+pub const DEFAULT_LOG_LEVEL: &str = "info";
+
 /// Plugin builder for customizing WebSocket server configuration.
 ///
 /// # Example
@@ -50,6 +54,7 @@ pub const DEFAULT_CONSOLE_LOG_LIMIT: u32 = 25;
 /// tauri_mcp::Builder::new()
 ///     .port(9224)          // Custom port
 ///     .host("0.0.0.0")     // Allow remote connections
+///     .log_level("debug")  // More verbose logging
 ///     .build()
 /// ```
 #[derive(Debug, Clone)]
@@ -57,6 +62,7 @@ pub struct Builder {
     port: u16,
     host: String,
     console_log_limit: u32,
+    log_level: Option<String>,
 }
 
 impl Default for Builder {
@@ -73,6 +79,7 @@ impl Builder {
             port: DEFAULT_PORT,
             host: String::new(), // Will use DEFAULT_HOST
             console_log_limit: DEFAULT_CONSOLE_LOG_LIMIT,
+            log_level: None,
         }
     }
 
@@ -100,6 +107,22 @@ impl Builder {
         self
     }
 
+    /// Set the log level for tauri-mcp.
+    ///
+    /// Valid levels: `error`, `warn`, `info`, `debug`, `trace`
+    ///
+    /// This can also be set via the `TAURI_MCP_LOG_LEVEL` environment variable.
+    /// The builder method takes precedence over the environment variable.
+    ///
+    /// Note: This attempts to initialize a tracing subscriber. If your application
+    /// already has a tracing subscriber configured, use `RUST_LOG=tauri_mcp=debug`
+    /// or configure your subscriber to filter `tauri_mcp` logs instead.
+    #[must_use]
+    pub fn log_level(mut self, level: impl Into<String>) -> Self {
+        self.log_level = Some(level.into());
+        self
+    }
+
     /// Build the Tauri plugin
     #[must_use]
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
@@ -108,7 +131,13 @@ impl Builder {
         } else {
             self.host
         };
-        build_plugin(self.port, host, self.console_log_limit)
+
+        // Determine log level: builder value > env var > default
+        let log_level = self
+            .log_level
+            .unwrap_or_else(|| std::env::var("TAURI_MCP_LOG_LEVEL").unwrap_or_else(|_| DEFAULT_LOG_LEVEL.to_string()));
+
+        build_plugin(self.port, host, self.console_log_limit, &log_level)
     }
 }
 
@@ -120,7 +149,34 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new().build()
 }
 
-fn build_plugin<R: Runtime>(port: u16, host: String, console_log_limit: u32) -> TauriPlugin<R> {
+/// Initialize tracing subscriber with the specified log level.
+///
+/// If a global subscriber is already set, this does nothing (no error).
+/// The subscriber filters logs to only show `tauri_mcp` module logs at the
+/// specified level or higher.
+fn init_tracing(log_level: &str) {
+    // Build a filter directive for the tauri_mcp module
+    // Format: "tauri_mcp=<level>" to only filter our logs
+    let directive = format!("tauri_mcp={log_level}");
+
+    let filter = EnvFilter::try_new(&directive).unwrap_or_else(|_| {
+        // Fall back to info level if the provided level is invalid
+        eprintln!(
+            "tauri-mcp: Invalid log level '{log_level}', using 'info'. Valid levels: error, warn, info, debug, trace"
+        );
+        EnvFilter::new("tauri_mcp=info")
+    });
+
+    // Try to set the global subscriber. If one is already set, this will
+    // silently do nothing (which is fine - the app controls logging).
+    let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
+}
+
+fn build_plugin<R: Runtime>(port: u16, host: String, console_log_limit: u32, log_level: &str) -> TauriPlugin<R> {
+    // Initialize tracing subscriber if none is set
+    // This allows TAURI_MCP_LOG_LEVEL to work out of the box
+    init_tracing(log_level);
+
     // Inject config into console capture script
     let console_script = format!(
         "window.__TAURI_MCP_CONFIG__ = {{ maxConsoleEntries: {} }};\n{}",
