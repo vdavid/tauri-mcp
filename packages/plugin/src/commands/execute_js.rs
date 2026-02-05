@@ -40,8 +40,15 @@ pub async fn console_logs<R: Runtime>(window: &WebviewWindow<R>, args: &Value) -
     let since = args.get("since").and_then(|v| v.as_str());
     let clear = args.get("clear").and_then(Value::as_bool).unwrap_or(false);
 
-    let filter_arg = filter.map_or_else(|| "null".to_string(), |f| format!("'{f}'"));
-    let since_arg = since.map_or_else(|| "null".to_string(), |s| format!("'{s}'"));
+    // Use JSON serialization for proper escaping of special characters
+    let filter_arg = filter.map_or_else(
+        || "null".to_string(),
+        |f| serde_json::to_string(f).unwrap_or_else(|_| "null".to_string()),
+    );
+    let since_arg = since.map_or_else(
+        || "null".to_string(),
+        |s| serde_json::to_string(s).unwrap_or_else(|_| "null".to_string()),
+    );
 
     let script = format!(
         r"

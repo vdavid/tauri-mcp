@@ -51,12 +51,17 @@
       }
 
       if (filter) {
-        const regex = new RegExp(filter);
-        result = result.filter(entry => regex.test(entry.message));
+        try {
+          const regex = new RegExp(filter);
+          result = result.filter(entry => regex.test(entry.message));
+        } catch (e) {
+          throw new Error(`Invalid filter regex: ${e.message}`);
+        }
       }
 
       return result;
     },
     clear: () => { logs.length = 0; },
+    getCount: () => logs.length,
   };
 })();
