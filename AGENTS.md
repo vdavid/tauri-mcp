@@ -4,21 +4,19 @@ MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect,
 
 ## Project status
 
-**Milestone 1 complete.** The project structure and Rust plugin skeleton are in place. All quality checks pass.
+**Milestones 1-4 complete.** The project structure, Rust plugin skeleton, macOS screenshot, and JS execution are in place. All quality checks pass.
 
 ### What's implemented
 - WebSocket server skeleton (`packages/plugin/src/websocket.rs`)
 - Command dispatch for all 9 tools (`packages/plugin/src/commands/`)
-- Screenshot: macOS returns placeholder PNG, Windows/Linux return "not implemented"
-- JS execution: Calls `window.eval()` but doesn't return results yet (TODO)
+- Screenshot: macOS uses `WKWebView.takeSnapshot` via objc2, Windows/Linux return "not implemented"
+- JS execution: Returns actual results via Tauri events, with 5s default timeout
 - Console capture: Injection script works, retrieval implemented
 - DOM snapshot, interact, wait-for: JS scripts exist, wired to commands
 - Window management: list/info/resize using Tauri APIs
 
-### What needs work (Milestones 2-15)
+### What needs work (Milestones 5-15)
 See [tasks.md](tasks.md) for the full list. Key items:
-- **Milestone 3**: Real macOS screenshot via `WKWebView.takeSnapshot` (objc2)
-- **Milestone 4**: Proper JS result retrieval (current impl just returns "Script executed")
 - **Milestone 10**: TypeScript MCP server (`packages/server/`)
 - **Milestone 11**: Test app frontend (Svelte todo list)
 
@@ -46,8 +44,8 @@ All checks must pass before committing.
 | `packages/plugin/src/lib.rs` | Plugin entry point, Builder pattern |
 | `packages/plugin/src/websocket.rs` | WebSocket server, request/response handling |
 | `packages/plugin/src/commands/mod.rs` | Command dispatch |
-| `packages/plugin/src/screenshot/macos.rs` | macOS screenshot (needs real implementation) |
-| `packages/plugin/src/commands/execute_js.rs` | JS execution (needs result retrieval) |
+| `packages/plugin/src/screenshot/macos.rs` | macOS screenshot via WKWebView |
+| `packages/plugin/src/commands/execute_js.rs` | JS execution with result retrieval via events |
 | `deny.toml` | Security/license config (gtk3-rs advisories ignored) |
 
 ## Commit guidelines

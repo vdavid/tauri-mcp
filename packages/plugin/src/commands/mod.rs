@@ -10,7 +10,6 @@ use tauri::{Manager, Runtime};
 use crate::websocket::{Request, WindowContext};
 
 /// Execute a command and return the result
-#[allow(clippy::unused_async)] // Keep async for consistency with WebSocket handler
 pub async fn execute<R: Runtime>(
     app: &tauri::AppHandle<R>,
     request: Request,
@@ -25,11 +24,11 @@ pub async fn execute<R: Runtime>(
 
     let result = match request.command.as_str() {
         "screenshot" => screenshot::execute(&window, &request.args),
-        "execute_js" => execute_js::execute(&window, &request.args),
-        "console_logs" => execute_js::console_logs(&window, &request.args),
-        "dom_snapshot" => execute_js::dom_snapshot(&window, &request.args),
-        "interact" => execute_js::interact(&window, &request.args),
-        "wait_for" => execute_js::wait_for(&window, &request.args),
+        "execute_js" => execute_js::execute(&window, &request.args).await,
+        "console_logs" => execute_js::console_logs(&window, &request.args).await,
+        "dom_snapshot" => execute_js::dom_snapshot(&window, &request.args).await,
+        "interact" => execute_js::interact(&window, &request.args).await,
+        "wait_for" => execute_js::wait_for(&window, &request.args).await,
         "window_list" => window::list(app),
         "window_info" => window::info(&window),
         "window_resize" => window::resize(&window, &request.args),
