@@ -140,29 +140,69 @@ pub async fn wait_for<R: Runtime>(window: &WebviewWindow<R>, args: &Value) -> Re
     eval_with_result(window, &full_script, timeout_secs + 2).await
 }
 
+/// Interval for fallback polling in milliseconds
+const FALLBACK_POLL_INTERVAL_MS: u64 = 50;
+
 /// Evaluate JavaScript and retrieve the result via Tauri events
 async fn eval_with_result<R: Runtime>(
     window: &WebviewWindow<R>,
     script: &str,
     timeout_secs: u64,
 ) -> Result<Value, String> {
-    // Generate unique execution ID
     let exec_id = Uuid::new_v4().to_string();
-
-    // Create oneshot channel for the result
     let (tx, rx) = oneshot::channel::<Value>();
     let tx = Arc::new(Mutex::new(Some(tx)));
 
     // Set up event listener for the result
-    let exec_id_clone = exec_id.clone();
-    let tx_clone = Arc::clone(&tx);
+    let unlisten = setup_result_listener(window, &exec_id, Arc::clone(&tx));
 
-    let unlisten = window.listen("__tauri_mcp_script_result", move |event| {
+    // Create and execute the wrapped script
+    let prepared_script = prepare_script(script);
+    let wrapped_script = create_wrapped_script(&exec_id, &prepared_script);
+
+    if let Err(e) = window.eval(&wrapped_script) {
+        window.unlisten(unlisten);
+        return Err(format!("Script execution failed: {e}"));
+    }
+
+    // Wait for result with timeout and fallback polling
+    let timeout = std::time::Duration::from_secs(timeout_secs);
+    let poll_interval = std::time::Duration::from_millis(FALLBACK_POLL_INTERVAL_MS);
+    let result = wait_for_result_with_polling(window, rx, &exec_id, timeout, poll_interval).await;
+
+    // Clean up
+    window.unlisten(unlisten);
+    let cleanup = format!(r"if (window.__tauriMcpResults) {{ delete window.__tauriMcpResults['{exec_id}']; }}");
+    let _ = window.eval(&cleanup);
+
+    // Extract the actual result or error
+    match result {
+        Ok(value) => {
+            if value.get("success").and_then(Value::as_bool).unwrap_or(false) {
+                Ok(value.get("data").cloned().unwrap_or(Value::Null))
+            } else {
+                let error = value
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Unknown error")
+                    .to_string();
+                Err(format!("Script error: {error}"))
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Set up the event listener for script results
+fn setup_result_listener<R: Runtime>(
+    window: &WebviewWindow<R>,
+    exec_id: &str,
+    tx: Arc<Mutex<Option<oneshot::Sender<Value>>>>,
+) -> tauri::EventId {
+    let exec_id_clone = exec_id.to_string();
+    window.listen("__tauri_mcp_script_result", move |event| {
         let payload_str = event.payload();
-
-        // Try to parse the payload
         if let Ok(payload) = serde_json::from_str::<ScriptResultPayload>(payload_str) {
-            // Check if this is our execution
             if payload.exec_id == exec_id_clone {
                 let result = if payload.success {
                     serde_json::json!({
@@ -176,8 +216,7 @@ async fn eval_with_result<R: Runtime>(
                     })
                 };
 
-                // Send result through the channel
-                let tx = tx_clone.clone();
+                let tx = tx.clone();
                 tokio::spawn(async move {
                     let mut guard = tx.lock().await;
                     if let Some(sender) = guard.take() {
@@ -186,31 +225,31 @@ async fn eval_with_result<R: Runtime>(
                 });
             }
         }
-    });
+    })
+}
 
-    // Prepare the script with appropriate return handling
-    let prepared_script = prepare_script(script);
-
-    // Create wrapped script that uses event emission for result communication
-    let wrapped_script = format!(
+/// Create the wrapped JavaScript that stores results and emits events
+fn create_wrapped_script(exec_id: &str, prepared_script: &str) -> String {
+    format!(
         r"
         (function() {{
-            // Helper to send result back - tries multiple methods
-            function __sendResult(success, data, error) {{
-                const payload = {{
-                    exec_id: '{exec_id}',
-                    success: success,
-                    data: data,
-                    error: error
-                }};
+            window.__tauriMcpResults = window.__tauriMcpResults || {{}};
 
-                // Try using __TAURI__ API (available when @tauri-apps/api is used)
+            function __storeResult(success, data, error) {{
+                window.__tauriMcpResults['{exec_id}'] = {{ success: success, data: data, error: error }};
+                setTimeout(function() {{
+                    if (window.__tauriMcpResults) {{ delete window.__tauriMcpResults['{exec_id}']; }}
+                }}, 10000);
+            }}
+
+            function __sendResult(success, data, error) {{
+                __storeResult(success, data, error);
+                const payload = {{ exec_id: '{exec_id}', success: success, data: data, error: error }};
+
                 if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {{
                     window.__TAURI__.event.emit('__tauri_mcp_script_result', payload);
                     return;
                 }}
-
-                // Try using __TAURI_INTERNALS__ (available in Tauri v2 webviews)
                 if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {{
                     window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
                         event: '__tauri_mcp_script_result',
@@ -218,73 +257,119 @@ async fn eval_with_result<R: Runtime>(
                     }});
                     return;
                 }}
-
-                // Fallback: log error (result will time out)
-                console.error('[tauri-mcp] Cannot emit event: no Tauri API available');
+                console.warn('[tauri-mcp] Event emission unavailable, using fallback polling');
             }}
 
-            // Execute the user script
             (async () => {{
                 try {{
-                    // Create function to execute user script
-                    const __executeScript = async () => {{
-                        {prepared_script}
-                    }};
-
-                    // Execute and get result
+                    const __executeScript = async () => {{ {prepared_script} }};
                     const __result = await __executeScript();
-
-                    // Handle promises
                     const __finalResult = __result instanceof Promise ? await __result : __result;
-
                     __sendResult(true, __finalResult !== undefined ? __finalResult : null, null);
                 }} catch (error) {{
                     __sendResult(false, null, error.message || String(error));
                 }}
             }})().catch(function(error) {{
-                // Catch any unhandled promise rejections
                 __sendResult(false, null, error.message || String(error));
             }});
         }})();
         "
-    );
+    )
+}
 
-    // Execute the wrapped script
-    if let Err(e) = window.eval(&wrapped_script) {
-        window.unlisten(unlisten);
-        return Err(format!("Script execution failed: {e}"));
-    }
+/// Wait for result via event channel with fallback polling
+async fn wait_for_result_with_polling<R: Runtime>(
+    window: &WebviewWindow<R>,
+    mut rx: oneshot::Receiver<Value>,
+    exec_id: &str,
+    timeout: std::time::Duration,
+    poll_interval: std::time::Duration,
+) -> Result<Value, String> {
+    let start = std::time::Instant::now();
 
-    // Wait for result with timeout
-    let timeout = std::time::Duration::from_secs(timeout_secs);
-    let result = match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(result)) => {
-            // Extract the actual result or error
-            if result.get("success").and_then(Value::as_bool).unwrap_or(false) {
-                Ok(result.get("data").cloned().unwrap_or(Value::Null))
-            } else {
-                let error = result
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .unwrap_or("Unknown error")
-                    .to_string();
-                Err(format!("Script error: {error}"))
+    loop {
+        // Check if we've exceeded the timeout
+        if start.elapsed() >= timeout {
+            return Err(format!("Script execution timeout after {}s", timeout.as_secs()));
+        }
+
+        // Try to receive from the event channel (non-blocking check)
+        match rx.try_recv() {
+            Ok(result) => return Ok(result),
+            Err(oneshot::error::TryRecvError::Closed) => {
+                return Err("Script execution failed: result channel closed".to_string());
+            }
+            Err(oneshot::error::TryRecvError::Empty) => {
+                // No result yet, try fallback polling
             }
         }
-        Ok(Err(_)) => {
-            // Channel was dropped
-            Err("Script execution failed: result channel closed".to_string())
-        }
-        Err(_) => {
-            // Timeout
-            Err(format!("Script execution timeout after {timeout_secs}s"))
-        }
-    };
 
-    // Clean up event listener
-    window.unlisten(unlisten);
+        // Fallback: poll the result store via eval
+        // Note: window.eval() doesn't return values directly, so we inject a script
+        // that stores the poll result in a known location, then re-emits it as an event
+        let poll_result_key = format!("__poll_{exec_id}");
+        let poll_check_script = format!(
+            r"(function() {{
+                var result = null;
+                if (window.__tauriMcpResults && window.__tauriMcpResults['{exec_id}']) {{
+                    result = window.__tauriMcpResults['{exec_id}'];
+                }}
+                window['{poll_result_key}'] = result;
+            }})()"
+        );
 
-    result
+        if window.eval(&poll_check_script).is_ok() {
+            // Give a tiny bit of time for the eval to complete
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+
+            // Now check if we can retrieve the poll result
+            let retrieve_script = format!(
+                r"(function() {{
+                    var r = window['{poll_result_key}'];
+                    delete window['{poll_result_key}'];
+                    if (r) {{
+                        // Send via event since we found a result
+                        var payload = {{
+                            exec_id: '{exec_id}',
+                            success: r.success,
+                            data: r.data,
+                            error: r.error
+                        }};
+                        if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {{
+                            window.__TAURI__.event.emit('__tauri_mcp_script_result', payload);
+                        }} else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {{
+                            window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
+                                event: '__tauri_mcp_script_result',
+                                payload: payload
+                            }});
+                        }}
+                    }}
+                }})()"
+            );
+
+            let _ = window.eval(&retrieve_script);
+        }
+
+        // Wait for the poll interval before trying again
+        let remaining = timeout.saturating_sub(start.elapsed());
+        let sleep_duration = poll_interval.min(remaining);
+        if sleep_duration.is_zero() {
+            return Err(format!("Script execution timeout after {}s", timeout.as_secs()));
+        }
+
+        // Use tokio::select! to wait for either the event or the poll interval
+        tokio::select! {
+            result = &mut rx => {
+                match result {
+                    Ok(value) => return Ok(value),
+                    Err(_) => return Err("Script execution failed: result channel closed".to_string()),
+                }
+            }
+            () = tokio::time::sleep(sleep_duration) => {
+                // Continue to next iteration for polling
+            }
+        }
+    }
 }
 
 /// Prepare script by adding return statement if needed
