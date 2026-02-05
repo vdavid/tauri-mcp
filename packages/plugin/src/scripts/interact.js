@@ -102,6 +102,22 @@ window.__tauriMcpInteract = function(args) {
       return { error: `Element does not accept text input: ${getElementDescription(el)}` };
     }
 
+    // Check if element is disabled or readonly
+    if (el.disabled) {
+      return { error: `Element is disabled: ${getElementDescription(el)}` };
+    }
+    if (el.readOnly) {
+      return { error: `Element is read-only: ${getElementDescription(el)}` };
+    }
+
+    // Check for input types that don't accept text
+    if (el.tagName === 'INPUT') {
+      const nonTextTypes = ['checkbox', 'radio', 'file', 'submit', 'reset', 'button', 'image', 'hidden', 'range', 'color'];
+      if (nonTextTypes.includes(el.type)) {
+        return { error: `Input type '${el.type}' does not accept text: ${getElementDescription(el)}` };
+      }
+    }
+
     // Focus the element
     el.focus();
 
@@ -116,7 +132,8 @@ window.__tauriMcpInteract = function(args) {
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    return { success: true, message: `Typed "${inputText.slice(0, 20)}${inputText.length > 20 ? '...' : ''}" into ${getElementDescription(el)}` };
+    const truncated = inputText.slice(0, 20);
+    return { success: true, message: `Typed "${truncated}${inputText.length > 20 ? '...' : ''}" into ${getElementDescription(el)}` };
   }
 
   function doScroll(el, deltaX, deltaY) {
@@ -148,8 +165,11 @@ window.__tauriMcpInteract = function(args) {
       if (firstClass) desc += `.${firstClass}`;
     }
 
-    const text = el.innerText?.trim().slice(0, 20);
-    if (text) desc += ` "${text}${el.innerText.length > 20 ? '...' : ''}"`;
+    const textContent = el.innerText?.trim();
+    if (textContent) {
+      const truncated = textContent.slice(0, 20);
+      desc += ` "${truncated}${textContent.length > 20 ? '...' : ''}"`;
+    }
 
     return desc;
   }
