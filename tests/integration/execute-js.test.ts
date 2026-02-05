@@ -20,116 +20,72 @@ describe("tauri_execute_js", () => {
     disconnect();
   });
 
-  it("should execute simple expression and return result", async (ctx) => {
+  it("should execute scripts and return various types", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
     }
 
-    const response = await sendCommand("execute_js", {
+    // String result (document title)
+    const titleResponse = await sendCommand("execute_js", {
       script: "document.title",
     });
+    expect(titleResponse.success).toBe(true);
+    expect(typeof titleResponse.data).toBe("string");
 
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-  });
+    // Number result
+    const mathResponse = await sendCommand("execute_js", { script: "2 + 2" });
+    expect(mathResponse.success).toBe(true);
+    expect(mathResponse.data).toBe(4);
 
-  it("should execute arithmetic expression", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", { script: "2 + 2" });
-
-    expect(response.success).toBe(true);
-    expect(response.data).toBe(4);
-  });
-
-  it("should return JSON-serializable objects", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", {
+    // Object result
+    const objResponse = await sendCommand("execute_js", {
       script: '({ foo: "bar", count: 42 })',
     });
+    expect(objResponse.success).toBe(true);
+    expect(objResponse.data).toEqual({ foo: "bar", count: 42 });
 
-    expect(response.success).toBe(true);
-    expect(response.data).toEqual({ foo: "bar", count: 42 });
-  });
-
-  it("should return arrays", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", {
+    // Array result
+    const arrayResponse = await sendCommand("execute_js", {
       script: "[1, 2, 3].map(x => x * 2)",
     });
+    expect(arrayResponse.success).toBe(true);
+    expect(arrayResponse.data).toEqual([2, 4, 6]);
 
-    expect(response.success).toBe(true);
-    expect(response.data).toEqual([2, 4, 6]);
-  });
-
-  it("should handle DOM queries", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", {
+    // DOM query result
+    const domResponse = await sendCommand("execute_js", {
       script: "document.querySelectorAll('*').length > 0",
     });
-
-    expect(response.success).toBe(true);
-    expect(response.data).toBe(true);
+    expect(domResponse.success).toBe(true);
+    expect(domResponse.data).toBe(true);
   });
 
-  it("should fail on syntax errors", async (ctx) => {
+  it("should handle errors appropriately", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
     }
 
-    const response = await sendCommand("execute_js", {
+    // Syntax error
+    const syntaxResponse = await sendCommand("execute_js", {
       script: "function { invalid syntax",
     });
+    expect(syntaxResponse.success).toBe(false);
+    expect(syntaxResponse.error).toBeDefined();
 
-    expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
-  });
-
-  it("should fail on runtime errors", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", {
+    // Runtime error
+    const runtimeResponse = await sendCommand("execute_js", {
       script: "nonExistentVariable.property",
     });
+    expect(runtimeResponse.success).toBe(false);
+    expect(runtimeResponse.error).toBeDefined();
 
-    expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
-  });
-
-  it("should fail for non-existent window", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("execute_js", {
+    // Non-existent window
+    const windowResponse = await sendCommand("execute_js", {
       script: "1",
       window_id: "nonexistent-window-12345",
     });
-
-    expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
-    expect(response.error?.toLowerCase()).toContain("not found");
+    expect(windowResponse.success).toBe(false);
+    expect(windowResponse.error?.toLowerCase()).toContain("not found");
   });
 });

@@ -20,74 +20,35 @@ describe("tauri_dom_snapshot", () => {
     disconnect();
   });
 
-  it("should capture accessibility snapshot", async (ctx) => {
+  it("should capture snapshots in different formats", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
     }
 
-    const response = await sendCommand("dom_snapshot", {
+    // Accessibility snapshot
+    const a11yResponse = await sendCommand("dom_snapshot", {
       snapshot_type: "accessibility",
     });
+    expect(a11yResponse.success).toBe(true);
+    expect(typeof a11yResponse.data).toBe("string");
+    expect((a11yResponse.data as string).length).toBeGreaterThan(0);
 
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-
-    const snapshot = response.data as string;
-    // Accessibility snapshot should contain role information
-    expect(snapshot.length).toBeGreaterThan(0);
-  });
-
-  it("should capture structure snapshot", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("dom_snapshot", {
+    // Structure snapshot
+    const structureResponse = await sendCommand("dom_snapshot", {
       snapshot_type: "structure",
     });
+    expect(structureResponse.success).toBe(true);
+    expect(typeof structureResponse.data).toBe("string");
+    expect((structureResponse.data as string).length).toBeGreaterThan(0);
 
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-
-    const snapshot = response.data as string;
-    // Structure snapshot should contain tag/element information
-    expect(snapshot.length).toBeGreaterThan(0);
-  });
-
-  it("should scope snapshot with selector", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("dom_snapshot", {
+    // Structure snapshot scoped to body
+    const scopedResponse = await sendCommand("dom_snapshot", {
       snapshot_type: "structure",
       selector: "body",
     });
-
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-  });
-
-  it("should fail for non-existent selector", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("dom_snapshot", {
-      snapshot_type: "structure",
-      selector: "#nonexistent-element-12345",
-    });
-
-    // Could either fail or return empty - depends on implementation
-    // Both are acceptable behaviors
-    expect(response).toBeDefined();
+    expect(scopedResponse.success).toBe(true);
+    expect(typeof scopedResponse.data).toBe("string");
   });
 
   it("should fail for non-existent window", async (ctx) => {
@@ -102,7 +63,6 @@ describe("tauri_dom_snapshot", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
     expect(response.error?.toLowerCase()).toContain("not found");
   });
 });

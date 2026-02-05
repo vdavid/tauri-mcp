@@ -20,44 +20,31 @@ describe("tauri_screenshot", () => {
     disconnect();
   });
 
-  it("should capture a PNG screenshot", async (ctx) => {
+  it("should capture screenshots in PNG and JPEG formats", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
     }
 
-    const response = await sendCommand("screenshot", { format: "png" });
-
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-
-    const data = response.data as string;
-    // PNG starts with specific base64 pattern or is a data URL
+    // PNG screenshot
+    const pngResponse = await sendCommand("screenshot", { format: "png" });
+    expect(pngResponse.success).toBe(true);
+    expect(typeof pngResponse.data).toBe("string");
+    const pngData = pngResponse.data as string;
     expect(
-      data.startsWith("data:image/png") || data.startsWith("iVBOR")
+      pngData.startsWith("data:image/png") || pngData.startsWith("iVBOR")
     ).toBe(true);
-  });
 
-  it("should capture a JPEG screenshot with quality", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("screenshot", {
+    // JPEG screenshot with quality
+    const jpegResponse = await sendCommand("screenshot", {
       format: "jpeg",
       quality: 80,
     });
-
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
-    expect(typeof response.data).toBe("string");
-
-    const data = response.data as string;
-    // JPEG has different base64 signature
+    expect(jpegResponse.success).toBe(true);
+    expect(typeof jpegResponse.data).toBe("string");
+    const jpegData = jpegResponse.data as string;
     expect(
-      data.startsWith("data:image/jpeg") || data.startsWith("/9j/")
+      jpegData.startsWith("data:image/jpeg") || jpegData.startsWith("/9j/")
     ).toBe(true);
   });
 
@@ -72,7 +59,6 @@ describe("tauri_screenshot", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
     expect(response.error?.toLowerCase()).toContain("not found");
   });
 });

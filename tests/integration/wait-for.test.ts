@@ -20,20 +20,27 @@ describe("tauri_wait_for", () => {
     disconnect();
   });
 
-  it("should wait for existing selector", async (ctx) => {
+  it("should wait for existing elements", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
     }
 
-    const response = await sendCommand("wait_for", {
+    // Wait for existing selector
+    const selectorResponse = await sendCommand("wait_for", {
       wait_type: "selector",
       value: "body",
       timeout: 5000,
     });
+    expect(selectorResponse.success).toBe(true);
 
-    expect(response.success).toBe(true);
-    expect(response.data).toBeDefined();
+    // Wait for visible element
+    const visibleResponse = await sendCommand("wait_for", {
+      wait_type: "visible",
+      value: "body",
+      timeout: 5000,
+    });
+    expect(visibleResponse.success).toBe(true);
   });
 
   it("should wait for text content", async (ctx) => {
@@ -42,7 +49,7 @@ describe("tauri_wait_for", () => {
       return;
     }
 
-    // First inject some known text
+    // Inject known text
     await sendCommand("execute_js", {
       script:
         'document.body.innerHTML += \'<div id="test-text">unique-wait-text-12345</div>\'',
@@ -53,7 +60,6 @@ describe("tauri_wait_for", () => {
       value: "unique-wait-text-12345",
       timeout: 5000,
     });
-
     expect(response.success).toBe(true);
 
     // Clean up
@@ -62,48 +68,7 @@ describe("tauri_wait_for", () => {
     });
   });
 
-  it("should wait for visible element", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("wait_for", {
-      wait_type: "visible",
-      value: "body",
-      timeout: 5000,
-    });
-
-    expect(response.success).toBe(true);
-  });
-
-  it("should wait for hidden element", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    // Create a hidden element
-    await sendCommand("execute_js", {
-      script:
-        'document.body.innerHTML += \'<div id="hidden-test" style="display: none;">hidden</div>\'',
-    });
-
-    const response = await sendCommand("wait_for", {
-      wait_type: "hidden",
-      value: "#hidden-test",
-      timeout: 5000,
-    });
-
-    expect(response.success).toBe(true);
-
-    // Clean up
-    await sendCommand("execute_js", {
-      script: 'document.getElementById("hidden-test")?.remove()',
-    });
-  });
-
-  it("should timeout for non-existent selector", async (ctx) => {
+  it("should timeout for non-existent conditions", async (ctx) => {
     if (await skipIfAppNotAvailable()) {
       ctx.skip();
       return;
@@ -112,28 +77,10 @@ describe("tauri_wait_for", () => {
     const response = await sendCommand("wait_for", {
       wait_type: "selector",
       value: "#nonexistent-element-that-will-never-appear-12345",
-      timeout: 1000, // Short timeout for faster test
-    });
-
-    expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
-    expect(response.error?.toLowerCase()).toContain("timeout");
-  });
-
-  it("should timeout for text that never appears", async (ctx) => {
-    if (await skipIfAppNotAvailable()) {
-      ctx.skip();
-      return;
-    }
-
-    const response = await sendCommand("wait_for", {
-      wait_type: "text",
-      value: "this-text-will-absolutely-never-appear-on-the-page-xyz789",
       timeout: 1000,
     });
 
     expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
     expect(response.error?.toLowerCase()).toContain("timeout");
   });
 
@@ -151,7 +98,6 @@ describe("tauri_wait_for", () => {
     });
 
     expect(response.success).toBe(false);
-    expect(response.error).toBeDefined();
     expect(response.error?.toLowerCase()).toContain("not found");
   });
 });

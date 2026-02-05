@@ -1,10 +1,6 @@
 /**
  * Test harness for connecting to a running Tauri test-app.
- * The test-app must be running before executing these tests.
- *
- * To run integration tests:
- * 1. Start the test-app: cd packages/test-app && pnpm tauri dev
- * 2. Run tests: cd tests && pnpm test
+ * Start the test-app before running tests: cd packages/test-app && pnpm tauri dev
  */
 
 import WebSocket from "ws";
@@ -12,12 +8,6 @@ import WebSocket from "ws";
 // ============================================================================
 // Types
 // ============================================================================
-
-export interface PluginRequest {
-  id: string;
-  command: string;
-  args?: Record<string, unknown>;
-}
 
 export interface PluginResponse {
   id: string;
@@ -31,18 +21,12 @@ export interface PluginResponse {
   };
 }
 
-interface PendingRequest {
-  resolve: (response: PluginResponse) => void;
-  reject: (error: Error) => void;
-  timeout: ReturnType<typeof setTimeout>;
-}
-
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const defaultHost = process.env.TAURI_MCP_HOST ?? "localhost";
-const defaultPort = parseInt(process.env.TAURI_MCP_PORT ?? "9223", 10);
+const host = process.env.TAURI_MCP_HOST ?? "localhost";
+const port = parseInt(process.env.TAURI_MCP_PORT ?? "9223", 10);
 const defaultTimeout = 10000;
 const connectionTimeout = 5000;
 
@@ -51,51 +35,26 @@ const connectionTimeout = 5000;
 // ============================================================================
 
 let ws: WebSocket | null = null;
-let pendingRequests = new Map<string, PendingRequest>();
+let pendingRequests = new Map<
+  string,
+  {
+    resolve: (response: PluginResponse) => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  }
+>();
 let requestCounter = 0;
 let appAvailable: boolean | null = null;
-
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-const generateRequestId = (): string => {
-  requestCounter++;
-  return `test_${Date.now()}_${requestCounter}`;
-};
-
-const handleMessage = (data: WebSocket.Data): void => {
-  try {
-    const message = JSON.parse(data.toString()) as PluginResponse;
-
-    if (message.id && pendingRequests.has(message.id)) {
-      const pending = pendingRequests.get(message.id);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        pendingRequests.delete(message.id);
-        pending.resolve(message);
-      }
-    }
-  } catch {
-    // Ignore parse errors
-  }
-};
 
 // ============================================================================
 // Public API
 // ============================================================================
 
 /**
- * Check if the test-app is running and available.
- * Caches the result to avoid repeated connection attempts.
+ * Check if the test-app is running. Caches result.
  */
-export const isAppAvailable = async (
-  host: string = defaultHost,
-  port: number = defaultPort
-): Promise<boolean> => {
-  if (appAvailable !== null) {
-    return appAvailable;
-  }
+export const isAppAvailable = async (): Promise<boolean> => {
+  if (appAvailable !== null) return appAvailable;
 
   return new Promise((resolve) => {
     const testWs = new WebSocket(`ws://${host}:${port}`);
@@ -123,17 +82,11 @@ export const isAppAvailable = async (
 /**
  * Connect to the test-app. Must be called before sending commands.
  */
-export const connect = async (
-  host: string = defaultHost,
-  port: number = defaultPort
-): Promise<void> => {
-  if (ws?.readyState === WebSocket.OPEN) {
-    return;
-  }
+export const connect = async (): Promise<void> => {
+  if (ws?.readyState === WebSocket.OPEN) return;
 
   return new Promise((resolve, reject) => {
-    const url = `ws://${host}:${port}`;
-    ws = new WebSocket(url);
+    ws = new WebSocket(`ws://${host}:${port}`);
     pendingRequests = new Map();
 
     const timeout = setTimeout(() => {
@@ -146,7 +99,19 @@ export const connect = async (
       resolve();
     });
 
-    ws.on("message", handleMessage);
+    ws.on("message", (data: WebSocket.Data) => {
+      try {
+        const message = JSON.parse(data.toString()) as PluginResponse;
+        const pending = pendingRequests.get(message.id);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          pendingRequests.delete(message.id);
+          pending.resolve(message);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    });
 
     ws.on("close", () => {
       for (const [id, pending] of pendingRequests) {
@@ -168,17 +133,10 @@ export const connect = async (
  * Disconnect from the test-app.
  */
 export const disconnect = (): void => {
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
+  ws?.close();
+  ws = null;
   pendingRequests.clear();
 };
-
-/**
- * Check if currently connected.
- */
-export const isConnected = (): boolean => ws?.readyState === WebSocket.OPEN;
 
 /**
  * Send a command to the plugin and wait for response.
@@ -192,8 +150,7 @@ export const sendCommand = async (
     throw new Error("Not connected to test-app");
   }
 
-  const id = generateRequestId();
-  const request: PluginRequest = { id, command, args };
+  const id = `test_${Date.now()}_${++requestCounter}`;
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -203,7 +160,7 @@ export const sendCommand = async (
 
     pendingRequests.set(id, { resolve, reject, timeout });
 
-    ws!.send(JSON.stringify(request), (error) => {
+    ws!.send(JSON.stringify({ id, command, args }), (error) => {
       if (error) {
         clearTimeout(timeout);
         pendingRequests.delete(id);
@@ -220,15 +177,8 @@ export const skipIfAppNotAvailable = async (): Promise<boolean> => {
   const available = await isAppAvailable();
   if (!available) {
     console.log(
-      "\n  [SKIP] Test-app not running. Start it with: cd packages/test-app && pnpm tauri dev\n"
+      "\n  [SKIP] Test-app not running. Start with: cd packages/test-app && pnpm tauri dev\n"
     );
   }
   return !available;
-};
-
-/**
- * Reset app availability cache. Useful between test runs.
- */
-export const resetAppAvailabilityCache = (): void => {
-  appAvailable = null;
 };
