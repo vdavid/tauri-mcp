@@ -4,6 +4,7 @@
   "description": "MCP server for Tauri v2 app automation",
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "tauri-mcp": "./dist/index.js"
   },

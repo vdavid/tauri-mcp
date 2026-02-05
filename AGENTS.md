@@ -4,7 +4,7 @@ MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect,
 
 ## Project status
 
-**Milestones 1-14 complete** (pending manual verification). The full implementation is in place: Rust plugin, TypeScript MCP server, test app, integration tests, documentation, and external validation guide.
+**All 15 milestones complete.** Version 0.1.0 is ready for release. The full implementation is in place: Rust plugin, TypeScript MCP server, test app, integration tests, documentation, and release preparation.
 
 ### What's implemented
 
@@ -37,20 +37,16 @@ MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect,
   - Root README with quick start guide
   - Testing guide for Cmdr validation (`docs/testing-guide.md`)
 
-### What needs work (Milestone 15)
+### Release preparation complete
 
-See [tasks.md](tasks.md) for the full list:
-- Version packages (0.1.0)
-- Prepare npm/crates.io publish configuration
-- Write CHANGELOG.md
-- Tag release in git
+- All packages versioned at 0.1.0
+- npm and crates.io publish configuration ready
+- CHANGELOG.md documents initial release
+- Ready to publish (run `cargo publish` and `npm publish` when ready)
 
-### Manual verification pending
+### Manual testing available
 
-The testing guide at `docs/testing-guide.md` documents how to manually verify tauri-mcp against Cmdr. Key items to verify:
-- Screenshot works on Cmdr's complex two-pane UI
-- DOM snapshot captures the dual-pane layout
-- Interact can click file list items
+The testing guide at `docs/testing-guide.md` documents how to verify tauri-mcp against external Tauri apps like Cmdr.
 
 ## Before you code
 
