@@ -1,6 +1,7 @@
 //! Command handlers for MCP requests.
 //!
 //! Each command corresponds to a tool in the MCP server:
+//! - `app_info` - Get application metadata
 //! - `screenshot` - Capture webview screenshot
 //! - `execute_js` - Run JavaScript in the webview
 //! - `console_logs` - Get captured console output
@@ -13,7 +14,7 @@ mod execute_js;
 mod screenshot;
 mod window;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{Manager, Runtime};
 
 use crate::websocket::{Request, WindowContext};
@@ -34,6 +35,7 @@ pub async fn execute<R: Runtime>(
     });
 
     let result = match request.command.as_str() {
+        "app_info" => app_info(app),
         "screenshot" => screenshot::execute(&window, &request.args),
         "execute_js" => execute_js::execute(&window, &request.args).await,
         "console_logs" => execute_js::console_logs(&window, &request.args).await,
@@ -44,7 +46,7 @@ pub async fn execute<R: Runtime>(
         "window_info" => window::info(&window),
         "window_resize" => window::resize(&window, &request.args),
         _ => Err(format!(
-            "Unknown command: '{}'. Available: screenshot, execute_js, console_logs, dom_snapshot, interact, wait_for, window_list, window_info, window_resize",
+            "Unknown command: '{}'. Available: app_info, screenshot, execute_js, console_logs, dom_snapshot, interact, wait_for, window_list, window_info, window_resize",
             request.command
         )),
     }?;
@@ -78,4 +80,17 @@ fn resolve_window<R: Runtime>(
             .cloned()
             .ok_or_else(|| "No window available".to_string())
     }
+}
+
+/// Get application information including the app name
+#[allow(clippy::unnecessary_wraps)] // Keep Result for consistent command signature
+fn app_info<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<Value, String> {
+    let package_info = app.package_info();
+    let name = package_info.name.clone();
+    let version = package_info.version.to_string();
+
+    Ok(json!({
+        "name": name,
+        "version": version,
+    }))
 }

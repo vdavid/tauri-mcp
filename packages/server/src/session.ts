@@ -8,6 +8,7 @@ import {
   disconnect,
   isConnected,
   getConnectionInfo,
+  sendCommand,
 } from "./client.js";
 
 // ============================================================================
@@ -60,7 +61,21 @@ export const startSession = async (
 
   try {
     await connect(targetHost, targetPort);
-    sessionState.appName = "Tauri App";
+
+    // Fetch actual app name from the Tauri plugin
+    try {
+      const response = await sendCommand("app_info");
+      if (response.success && response.data) {
+        const data = response.data as { name?: string };
+        sessionState.appName = data.name ?? "Tauri App";
+      } else {
+        sessionState.appName = "Tauri App";
+      }
+    } catch {
+      // Fall back to default if app_info fails
+      sessionState.appName = "Tauri App";
+    }
+
     return `Connected to ${sessionState.appName} (${targetHost}:${targetPort})`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
