@@ -71,10 +71,21 @@ pub async fn console_logs<R: Runtime>(window: &WebviewWindow<R>, args: &Value) -
 pub async fn dom_snapshot<R: Runtime>(window: &WebviewWindow<R>, args: &Value) -> Result<Value, String> {
     let snapshot_type = args.get("type").and_then(|v| v.as_str()).unwrap_or("accessibility");
 
+    // Validate snapshot type
+    if snapshot_type != "accessibility" && snapshot_type != "structure" {
+        return Err(format!(
+            "Invalid snapshot type: '{snapshot_type}'. Use 'accessibility' or 'structure'."
+        ));
+    }
+
     let selector = args.get("selector").and_then(|v| v.as_str());
 
     let script = include_str!("../scripts/dom-snapshot.js");
-    let selector_arg = selector.map_or_else(|| "null".to_string(), |s| format!("'{s}'"));
+    // Use JSON serialization for proper escaping of special characters in selector
+    let selector_arg = selector.map_or_else(
+        || "null".to_string(),
+        |s| serde_json::to_string(s).unwrap_or_else(|_| "null".to_string()),
+    );
 
     let full_script = format!(
         r"

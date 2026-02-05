@@ -4,7 +4,7 @@ MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect,
 
 ## Project status
 
-**Milestones 1-4 complete.** The project structure, Rust plugin skeleton, macOS screenshot, and JS execution are in place. All quality checks pass.
+**Milestones 1-7 complete.** The project structure, Rust plugin, screenshot, JS execution, console capture, window management, and DOM snapshot are in place. All quality checks pass.
 
 ### What's implemented
 - WebSocket server skeleton (`packages/plugin/src/websocket.rs`)
@@ -15,7 +15,7 @@ MCP server plugin for Tauri v2 app automation. Enables AI assistants to inspect,
 - DOM snapshot, interact, wait-for: JS scripts exist, wired to commands
 - Window management: list/info/resize using Tauri APIs
 
-### What needs work (Milestones 5-15)
+### What needs work (Milestones 8-15)
 See [tasks.md](tasks.md) for the full list. Key items:
 - **Milestone 10**: TypeScript MCP server (`packages/server/`)
 - **Milestone 11**: Test app frontend (Svelte todo list)
