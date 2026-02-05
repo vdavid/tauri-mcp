@@ -140,8 +140,11 @@ pub async fn wait_for<R: Runtime>(window: &WebviewWindow<R>, args: &Value) -> Re
     eval_with_result(window, &full_script, timeout_secs + 2).await
 }
 
+/// Initial wait time before starting fallback polling (milliseconds)
+const INITIAL_WAIT_MS: u64 = 500;
+
 /// Interval for fallback polling in milliseconds
-const FALLBACK_POLL_INTERVAL_MS: u64 = 50;
+const FALLBACK_POLL_INTERVAL_MS: u64 = 100;
 
 /// Evaluate JavaScript and retrieve the result via Tauri events
 async fn eval_with_result<R: Runtime>(
@@ -165,10 +168,9 @@ async fn eval_with_result<R: Runtime>(
         return Err(format!("Script execution failed: {e}"));
     }
 
-    // Wait for result with timeout and fallback polling
+    // Wait for result with timeout and lazy fallback polling
     let timeout = std::time::Duration::from_secs(timeout_secs);
-    let poll_interval = std::time::Duration::from_millis(FALLBACK_POLL_INTERVAL_MS);
-    let result = wait_for_result_with_polling(window, rx, &exec_id, timeout, poll_interval).await;
+    let result = wait_for_result(window, rx, &exec_id, timeout).await;
 
     // Clean up
     window.unlisten(unlisten);
@@ -277,99 +279,70 @@ fn create_wrapped_script(exec_id: &str, prepared_script: &str) -> String {
     )
 }
 
-/// Wait for result via event channel with fallback polling
-async fn wait_for_result_with_polling<R: Runtime>(
+/// Wait for result via event channel with lazy fallback polling
+///
+/// This function trusts events first and only starts polling after an initial wait period
+/// if no event is received. This is more efficient than polling from the start.
+async fn wait_for_result<R: Runtime>(
     window: &WebviewWindow<R>,
     mut rx: oneshot::Receiver<Value>,
     exec_id: &str,
     timeout: std::time::Duration,
-    poll_interval: std::time::Duration,
 ) -> Result<Value, String> {
+    let initial_wait = std::time::Duration::from_millis(INITIAL_WAIT_MS).min(timeout);
+    let poll_interval = std::time::Duration::from_millis(FALLBACK_POLL_INTERVAL_MS);
     let start = std::time::Instant::now();
 
-    loop {
-        // Check if we've exceeded the timeout
-        if start.elapsed() >= timeout {
-            return Err(format!("Script execution timeout after {}s", timeout.as_secs()));
+    // Phase 1: Wait for event without polling (trust the event mechanism)
+    tokio::select! {
+        biased;
+        result = &mut rx => {
+            return result.map_err(|_| "Result channel closed".to_string());
         }
-
-        // Try to receive from the event channel (non-blocking check)
-        match rx.try_recv() {
-            Ok(result) => return Ok(result),
-            Err(oneshot::error::TryRecvError::Closed) => {
-                return Err("Script execution failed: result channel closed".to_string());
-            }
-            Err(oneshot::error::TryRecvError::Empty) => {
-                // No result yet, try fallback polling
-            }
+        () = tokio::time::sleep(initial_wait) => {
+            // Event didn't arrive in initial wait, start fallback polling
         }
+    }
 
-        // Fallback: poll the result store via eval
-        // Note: window.eval() doesn't return values directly, so we inject a script
-        // that stores the poll result in a known location, then re-emits it as an event
-        let poll_result_key = format!("__poll_{exec_id}");
-        let poll_check_script = format!(
+    // Phase 2: Fallback polling - check result store and re-emit events
+    while start.elapsed() < timeout {
+        // Poll the result store and re-emit as event
+        let poll_script = format!(
             r"(function() {{
-                var result = null;
                 if (window.__tauriMcpResults && window.__tauriMcpResults['{exec_id}']) {{
-                    result = window.__tauriMcpResults['{exec_id}'];
+                    var r = window.__tauriMcpResults['{exec_id}'];
+                    var payload = {{
+                        exec_id: '{exec_id}',
+                        success: r.success,
+                        data: r.data,
+                        error: r.error
+                    }};
+                    if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {{
+                        window.__TAURI__.event.emit('__tauri_mcp_script_result', payload);
+                    }} else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {{
+                        window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
+                            event: '__tauri_mcp_script_result',
+                            payload: payload
+                        }});
+                    }}
                 }}
-                window['{poll_result_key}'] = result;
             }})()"
         );
+        let _ = window.eval(&poll_script);
 
-        if window.eval(&poll_check_script).is_ok() {
-            // Give a tiny bit of time for the eval to complete
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-
-            // Now check if we can retrieve the poll result
-            let retrieve_script = format!(
-                r"(function() {{
-                    var r = window['{poll_result_key}'];
-                    delete window['{poll_result_key}'];
-                    if (r) {{
-                        // Send via event since we found a result
-                        var payload = {{
-                            exec_id: '{exec_id}',
-                            success: r.success,
-                            data: r.data,
-                            error: r.error
-                        }};
-                        if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {{
-                            window.__TAURI__.event.emit('__tauri_mcp_script_result', payload);
-                        }} else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {{
-                            window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {{
-                                event: '__tauri_mcp_script_result',
-                                payload: payload
-                            }});
-                        }}
-                    }}
-                }})()"
-            );
-
-            let _ = window.eval(&retrieve_script);
-        }
-
-        // Wait for the poll interval before trying again
-        let remaining = timeout.saturating_sub(start.elapsed());
-        let sleep_duration = poll_interval.min(remaining);
-        if sleep_duration.is_zero() {
-            return Err(format!("Script execution timeout after {}s", timeout.as_secs()));
-        }
-
-        // Use tokio::select! to wait for either the event or the poll interval
+        // Wait for either event or poll interval
         tokio::select! {
+            biased;
             result = &mut rx => {
-                match result {
-                    Ok(value) => return Ok(value),
-                    Err(_) => return Err("Script execution failed: result channel closed".to_string()),
-                }
+                return result.map_err(|_| "Result channel closed".to_string());
             }
-            () = tokio::time::sleep(sleep_duration) => {
-                // Continue to next iteration for polling
+            () = tokio::time::sleep(poll_interval) => {
+                // Continue polling
             }
         }
     }
+
+    Err(format!("Script execution timeout after {}ms", timeout.as_millis()))
 }
 
 /// Prepare script by adding return statement if needed

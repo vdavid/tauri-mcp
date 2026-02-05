@@ -12,21 +12,46 @@ window.__tauriMcpWaitFor = async function(args) {
     throw new Error("Missing 'value' argument.");
   }
 
-  const startTime = Date.now();
-  const pollInterval = 100;
-
-  while (Date.now() - startTime < timeout) {
-    const result = checkCondition(type, value);
-    if (result.satisfied) {
-      return { success: true, message: result.message };
-    }
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    await sleep(pollInterval);
+  // Check immediately first - element might already exist
+  const immediate = checkCondition(type, value);
+  if (immediate.satisfied) {
+    return { success: true, message: immediate.message };
+  }
+  if (immediate.error) {
+    throw new Error(immediate.error);
   }
 
-  throw new Error(getTimeoutMessage(type, value, timeout));
+  return new Promise((resolve, reject) => {
+    let observer;
+    let timeoutId;
+
+    const cleanup = () => {
+      if (observer) observer.disconnect();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+
+    // Set up timeout
+    timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error(getTimeoutMessage(type, value, timeout)));
+    }, timeout);
+
+    // Set up MutationObserver
+    observer = new MutationObserver(() => {
+      const result = checkCondition(type, value);
+      if (result.satisfied) {
+        cleanup();
+        resolve({ success: true, message: result.message });
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: type === 'text'
+    });
+  });
 
   function getTimeoutMessage(conditionType, conditionValue, timeoutMs) {
     switch (conditionType) {
@@ -92,9 +117,5 @@ window.__tauriMcpWaitFor = async function(args) {
     if (style.opacity === '0') return false;
 
     return true;
-  }
-
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 };

@@ -108,10 +108,20 @@ tauri_screenshot({ format: "png" })
 
 ```
 tauri_dom_snapshot({ type: "accessibility" })
-→ YAML tree with roles, names, and states
+→ YAML format:
+  - tag: button
+    role: button
+    name: Submit
+    selector: "#submit-btn"
 
-tauri_dom_snapshot({ type: "structure", selector: "#main" })
-→ YAML tree with tags, IDs, classes (scoped to #main)
+tauri_dom_snapshot({ type: "structure" })
+→ Tree format:
+  div.app
+  ├─ header
+  │  └─ h1
+  └─ main#content
+     ├─ form
+     └─ button.submit-btn
 ```
 
 ### Execute JavaScript
@@ -180,6 +190,35 @@ By default, the WebSocket server binds to `localhost` only. If you use `.host("0
 | UI interaction | Yes | Yes | Yes |
 
 Screenshots on Windows and Linux will return a "not implemented" error. Other features work on all platforms.
+
+## Limitations
+
+### DOM snapshot depth
+
+The DOM snapshot has a maximum depth of 20 levels. Deeper nesting is truncated without warning. This prevents performance issues on deeply nested DOMs.
+
+### No iframe support
+
+The `interact`, `wait_for`, and `dom_snapshot` commands only work on the main document. They cannot access elements inside `<iframe>` elements due to browser security restrictions.
+
+### JavaScript execution requirements
+
+The plugin uses Tauri's event system to return JavaScript execution results. This works automatically in most cases through two mechanisms:
+
+1. **`window.__TAURI__.event`** - Available when `withGlobalTauri: true` in your `tauri.conf.json`
+2. **`window.__TAURI_INTERNALS__`** - Always available in Tauri v2 webviews (internal API)
+
+If neither is available, JavaScript execution will time out. If you encounter timeouts, add this to your `tauri.conf.json`:
+
+```json
+{
+  "app": {
+    "withGlobalTauri": true
+  }
+}
+```
+
+This exposes Tauri's JavaScript API globally. It's safe for apps that only run trusted code (most Tauri apps), but avoid it if your app loads untrusted third-party content.
 
 ## Architecture
 

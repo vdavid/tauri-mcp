@@ -15,7 +15,7 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
     throw new Error(`Unknown snapshot type: ${type}. Use 'accessibility' or 'structure'.`);
   }
 
-  function captureAccessibilityTree(element, depth = 0) {
+  function captureAccessibilityTree(element) {
     const result = [];
     const walker = document.createTreeWalker(
       element,
@@ -41,7 +41,45 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
       node = walker.nextNode();
     }
 
-    return result;
+    return formatAccessibilityAsYaml(result);
+  }
+
+  function formatAccessibilityAsYaml(items) {
+    if (items.length === 0) return '';
+
+    const lines = [];
+    for (const item of items) {
+      lines.push(`- tag: ${item.tag}`);
+      if (item.role) lines.push(`  role: ${item.role}`);
+      if (item.name) lines.push(`  name: ${yamlEscape(item.name)}`);
+      if (item.value !== undefined) lines.push(`  value: ${yamlEscape(item.value)}`);
+      if (item.disabled) lines.push(`  disabled: true`);
+      if (item.checked) lines.push(`  checked: true`);
+      if (item.selected) lines.push(`  selected: true`);
+      if (item.expanded !== undefined) lines.push(`  expanded: ${item.expanded}`);
+      if (item.pressed !== undefined) lines.push(`  pressed: ${item.pressed}`);
+      if (item.selector) lines.push(`  selector: ${yamlEscapeSelector(item.selector)}`);
+    }
+    return lines.join('\n');
+  }
+
+  function yamlEscape(value) {
+    if (value === '') return '""';
+    if (value === null || value === undefined) return '""';
+    const str = String(value);
+    // Quote if contains special YAML characters or starts/ends with whitespace
+    if (/[:\[\]{}#&*!|>'"%@`]/.test(str) || /^\s|\s$/.test(str) || str.includes('\n')) {
+      return '"' + str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+    }
+    return str;
+  }
+
+  function yamlEscapeSelector(selector) {
+    // Selectors often contain special chars like >, :, #, etc.
+    if (/[>\s:\[\]#.]/.test(selector)) {
+      return '"' + selector.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    }
+    return selector;
   }
 
   function getAccessibilityInfo(element) {
@@ -138,37 +176,86 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
   }
 
   function captureStructureTree(element) {
-    return walkStructure(element);
+    return formatStructureTree(element, '', true);
   }
 
-  function walkStructure(element, depth = 0) {
-    if (depth > 20) return null; // Prevent infinite recursion
+  function formatStructureTree(element, prefix, isLast, depth = 0) {
+    if (depth > 20) return ''; // Prevent infinite recursion
 
-    const info = {
-      tag: element.tagName.toLowerCase(),
-    };
+    const lines = [];
+    const nodeStr = formatNodeString(element);
 
-    if (element.id) info.id = element.id;
+    if (depth === 0) {
+      // Root element has no prefix
+      lines.push(nodeStr);
+    } else {
+      const connector = isLast ? '└─ ' : '├─ ';
+      lines.push(prefix + connector + nodeStr);
+    }
+
+    const children = Array.from(element.children);
+    const childCount = children.length;
+
+    for (let i = 0; i < childCount; i++) {
+      const child = children[i];
+      const isLastChild = i === childCount - 1;
+      let childPrefix;
+
+      if (depth === 0) {
+        childPrefix = '';
+      } else {
+        childPrefix = prefix + (isLast ? '   ' : '│  ');
+      }
+
+      const childLines = formatStructureTree(child, childPrefix, isLastChild, depth + 1);
+      if (childLines) {
+        lines.push(childLines);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  function formatNodeString(element) {
+    let str = element.tagName.toLowerCase();
+
+    // Add class (first class only for brevity, or all classes joined by dots)
     if (element.className && typeof element.className === 'string') {
-      const classes = element.className.trim();
-      if (classes) info.class = classes;
-    }
-    if (element.dataset.testid) info.testid = element.dataset.testid;
-
-    const children = [];
-    for (const child of element.children) {
-      const childInfo = walkStructure(child, depth + 1);
-      if (childInfo) children.push(childInfo);
+      const classes = element.className.trim().split(/\s+/).filter(Boolean);
+      if (classes.length > 0) {
+        str += '.' + classes.join('.');
+      }
     }
 
-    if (children.length > 0) info.children = children;
+    // Add id
+    if (element.id) {
+      str += '#' + element.id;
+    }
 
-    return info;
+    // Add data-testid
+    if (element.dataset.testid) {
+      str += ' @' + element.dataset.testid;
+    }
+
+    return str;
+  }
+
+  function escapeCssIdentifier(id) {
+    // Use CSS.escape if available, otherwise implement a simple escaper
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(id);
+    }
+    // Simple escaper for special characters in CSS identifiers
+    return id.replace(/([^\w-])/g, '\\$1');
   }
 
   function getUniqueSelector(element) {
-    if (element.id) return `#${element.id}`;
-    if (element.dataset.testid) return `[data-testid="${element.dataset.testid}"]`;
+    if (element.id) {
+      return '#' + escapeCssIdentifier(element.id);
+    }
+    if (element.dataset.testid) {
+      return `[data-testid="${element.dataset.testid}"]`;
+    }
 
     const path = [];
     let current = element;
@@ -177,8 +264,16 @@ window.__tauriMcpDomSnapshot = function(type, selector) {
       let selector = current.tagName.toLowerCase();
 
       if (current.id) {
-        path.unshift(`#${current.id}`);
+        path.unshift('#' + escapeCssIdentifier(current.id));
         break;
+      }
+
+      // Add class if available for more specific selection
+      if (current.className && typeof current.className === 'string') {
+        const classes = current.className.trim().split(/\s+/).filter(Boolean);
+        if (classes.length > 0) {
+          selector += '.' + classes.map(escapeCssIdentifier).join('.');
+        }
       }
 
       const siblings = current.parentElement?.children || [];

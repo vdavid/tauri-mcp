@@ -150,7 +150,7 @@ const handleScreenshot: ToolHandler = async (args) => {
   const response = await sendCommand("screenshot", {
     format: format ?? "png",
     quality,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -174,7 +174,7 @@ const handleDomSnapshot: ToolHandler = async (args) => {
   const response = await sendCommand("dom_snapshot", {
     type,
     selector,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -191,7 +191,7 @@ const handleExecuteJs: ToolHandler = async (args) => {
 
   const response = await sendCommand("execute_js", {
     script,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -210,7 +210,7 @@ const handleConsoleLogs: ToolHandler = async (args) => {
     filter,
     since,
     clear,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -238,7 +238,7 @@ const handleWindowInfo: ToolHandler = async (args) => {
   const { windowId } = windowInfoSchema.parse(args);
 
   const response = await sendCommand("window_info", {
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -255,7 +255,7 @@ const handleWindowResize: ToolHandler = async (args) => {
   const response = await sendCommand("window_resize", {
     width,
     height,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -278,7 +278,7 @@ const handleInteract: ToolHandler = async (args) => {
     text,
     scroll_x: scrollX,
     scroll_y: scrollY,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {
@@ -296,7 +296,7 @@ const handleWaitFor: ToolHandler = async (args) => {
     type,
     value,
     timeout: timeout ?? 5000,
-    window_id: windowId,
+    windowId,
   });
 
   if (!response.success) {

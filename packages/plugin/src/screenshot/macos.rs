@@ -98,7 +98,8 @@ pub fn capture<R: Runtime>(window: &WebviewWindow<R>, format: &str, quality: Opt
     };
 
     // Convert to requested format
-    let final_data = if format == "jpeg" || format == "jpg" {
+    let format_lower = format.to_lowercase();
+    let final_data = if format_lower == "jpeg" || format_lower == "jpg" {
         convert_png_to_jpeg(&png_data, quality.unwrap_or(80))?
     } else {
         png_data

@@ -68,7 +68,15 @@ pub struct ServerState<R: Runtime> {
 }
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_COMMAND_TIMEOUT_SECS: u64 = 10;
+
+/// Get command timeout from `TAURI_MCP_TIMEOUT` env var (in ms) or default to 10s
+fn get_command_timeout() -> Duration {
+    std::env::var("TAURI_MCP_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map_or(Duration::from_secs(DEFAULT_COMMAND_TIMEOUT_SECS), Duration::from_millis)
+}
 
 /// Handle for shutting down the WebSocket server gracefully.
 ///
@@ -221,7 +229,8 @@ async fn handle_request<R: Runtime>(text: &str, state: &ServerState<R>) -> Respo
     let id = request.id.clone();
 
     // Execute command with timeout
-    let result = tokio::time::timeout(COMMAND_TIMEOUT, commands::execute(&state.app, request)).await;
+    let timeout = get_command_timeout();
+    let result = tokio::time::timeout(timeout, commands::execute(&state.app, request)).await;
 
     match result {
         Ok(Ok((data, context))) => Response {
@@ -242,7 +251,7 @@ async fn handle_request<R: Runtime>(text: &str, state: &ServerState<R>) -> Respo
             id,
             success: false,
             data: None,
-            error: Some(format!("Command timed out after {}s", COMMAND_TIMEOUT.as_secs())),
+            error: Some(format!("Command timed out after {}ms", timeout.as_millis())),
             window_context: None,
         },
     }

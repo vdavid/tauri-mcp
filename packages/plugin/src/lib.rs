@@ -41,7 +41,7 @@ pub const DEFAULT_PORT: u16 = 9223;
 pub const DEFAULT_HOST: &str = "localhost";
 
 /// Default console log limit (protects against runaway scripts flooding logs)
-pub const DEFAULT_CONSOLE_LOG_LIMIT: u32 = 25;
+pub const DEFAULT_CONSOLE_LOG_LIMIT: u32 = 100;
 
 /// Default log level
 pub const DEFAULT_LOG_LEVEL: &str = "info";
@@ -99,7 +99,7 @@ impl Builder {
 
     /// Set the maximum number of console log entries to capture.
     ///
-    /// A small default (25) protects against runaway scripts flooding logs.
+    /// Default (100) balances history with memory. Increase if you need more.
     /// Increase if you need more debug history.
     #[must_use]
     pub const fn console_log_limit(mut self, limit: u32) -> Self {
