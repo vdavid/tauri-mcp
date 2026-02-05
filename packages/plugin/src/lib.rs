@@ -39,6 +39,9 @@ pub const DEFAULT_PORT: u16 = 9223;
 /// Default WebSocket server host
 pub const DEFAULT_HOST: &str = "localhost";
 
+/// Default console log limit (protects against runaway scripts flooding logs)
+pub const DEFAULT_CONSOLE_LOG_LIMIT: u32 = 25;
+
 /// Plugin builder for customizing WebSocket server configuration.
 ///
 /// # Example
@@ -53,6 +56,7 @@ pub const DEFAULT_HOST: &str = "localhost";
 pub struct Builder {
     port: u16,
     host: String,
+    console_log_limit: u32,
 }
 
 impl Default for Builder {
@@ -68,6 +72,7 @@ impl Builder {
         Self {
             port: DEFAULT_PORT,
             host: String::new(), // Will use DEFAULT_HOST
+            console_log_limit: DEFAULT_CONSOLE_LOG_LIMIT,
         }
     }
 
@@ -85,6 +90,16 @@ impl Builder {
         self
     }
 
+    /// Set the maximum number of console log entries to capture.
+    ///
+    /// A small default (25) protects against runaway scripts flooding logs.
+    /// Increase if you need more debug history.
+    #[must_use]
+    pub const fn console_log_limit(mut self, limit: u32) -> Self {
+        self.console_log_limit = limit;
+        self
+    }
+
     /// Build the Tauri plugin
     #[must_use]
     pub fn build<R: Runtime>(self) -> TauriPlugin<R> {
@@ -93,7 +108,7 @@ impl Builder {
         } else {
             self.host
         };
-        build_plugin(self.port, host)
+        build_plugin(self.port, host, self.console_log_limit)
     }
 }
 
@@ -105,7 +120,14 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new().build()
 }
 
-fn build_plugin<R: Runtime>(port: u16, host: String) -> TauriPlugin<R> {
+fn build_plugin<R: Runtime>(port: u16, host: String, console_log_limit: u32) -> TauriPlugin<R> {
+    // Inject config into console capture script
+    let console_script = format!(
+        "window.__TAURI_MCP_CONFIG__ = {{ maxConsoleEntries: {} }};\n{}",
+        console_log_limit,
+        include_str!("console_capture.js")
+    );
+
     tauri::plugin::Builder::new("mcp")
         .setup(move |app, _api| {
             let app_handle = app.clone();
@@ -145,6 +167,6 @@ fn build_plugin<R: Runtime>(port: u16, host: String) -> TauriPlugin<R> {
                 }
             }
         })
-        .js_init_script(include_str!("console_capture.js").to_string())
+        .js_init_script(console_script)
         .build()
 }

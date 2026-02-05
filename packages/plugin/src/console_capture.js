@@ -5,7 +5,9 @@
 
   if (window.__tauriMcpConsole) return; // Already initialized
 
-  const maxEntries = 1000;
+  // Read config from injected global (set by Rust plugin before this script)
+  const config = window.__TAURI_MCP_CONFIG__ || {};
+  const maxEntries = config.maxConsoleEntries || 25;
   const logs = [];
 
   const originalConsole = {
