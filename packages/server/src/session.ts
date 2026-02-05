@@ -8,7 +8,6 @@ import {
   disconnect,
   isConnected,
   getConnectionInfo,
-  sendCommand,
 } from "./client.js";
 
 // ============================================================================
@@ -32,23 +31,6 @@ interface SessionState {
 
 let sessionState: SessionState = {
   appName: null,
-};
-
-// ============================================================================
-// Internal helpers
-// ============================================================================
-
-const fetchAppName = async (): Promise<string> => {
-  try {
-    const response = await sendCommand("app_info", {});
-    if (response.success && response.data) {
-      const data = response.data as { name?: string };
-      return data.name ?? "Tauri App";
-    }
-  } catch {
-    // Fall back to default name
-  }
-  return "Tauri App";
 };
 
 // ============================================================================
@@ -78,7 +60,7 @@ export const startSession = async (
 
   try {
     await connect(targetHost, targetPort);
-    sessionState.appName = await fetchAppName();
+    sessionState.appName = "Tauri App";
     return `Connected to ${sessionState.appName} (${targetHost}:${targetPort})`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

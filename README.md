@@ -76,7 +76,7 @@ Add to your MCP client configuration (for example, Claude Desktop or Cursor):
 | Tool | Description |
 |------|-------------|
 | `tauri_session` | Start, stop, or check connection to a Tauri app |
-| `tauri_screenshot` | Capture webview screenshot (PNG or JPEG) |
+| `tauri_screenshot` | Capture webview screenshot (PNG or JPEG). **macOS only.** |
 | `tauri_dom_snapshot` | Get DOM tree (accessibility or structure) |
 | `tauri_execute_js` | Run JavaScript in the webview |
 | `tauri_console_logs` | Get captured console output |
@@ -85,6 +85,8 @@ Add to your MCP client configuration (for example, Claude Desktop or Cursor):
 | `tauri_window_resize` | Resize a window |
 | `tauri_interact` | Click, type, scroll |
 | `tauri_wait_for` | Wait for selectors, text, or visibility |
+
+> **Note:** Screenshots are only supported on macOS. Windows and Linux return an error.
 
 ## Tool examples
 

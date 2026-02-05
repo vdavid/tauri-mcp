@@ -172,7 +172,7 @@ const handleDomSnapshot: ToolHandler = async (args) => {
   const { type, selector, windowId } = domSnapshotSchema.parse(args);
 
   const response = await sendCommand("dom_snapshot", {
-    snapshot_type: type,
+    type,
     selector,
     window_id: windowId,
   });
@@ -292,7 +292,7 @@ const handleWaitFor: ToolHandler = async (args) => {
   const { type, value, timeout, windowId } = waitForSchema.parse(args);
 
   const response = await sendCommand("wait_for", {
-    wait_type: type,
+    type,
     value,
     timeout: timeout ?? 5000,
     window_id: windowId,
@@ -326,7 +326,8 @@ export const tools: ToolDefinition[] = [
     description:
       "Capture a screenshot of the Tauri app's webview. " +
       "Returns the image as base64. " +
-      "Supports PNG (default) or JPEG format with quality setting.",
+      "Supports PNG (default) or JPEG format with quality setting. " +
+      "Note: Screenshots are only supported on macOS. Windows and Linux return an error.",
     schema: screenshotSchema,
     handler: handleScreenshot,
   },
