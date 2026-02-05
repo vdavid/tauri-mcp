@@ -186,3 +186,238 @@ async fn handle_request<R: Runtime>(text: &str, state: &ServerState<R>) -> Respo
         },
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // Request deserialization tests
+
+    #[test]
+    fn request_parses_minimal_fields() {
+        let json = r#"{"id": "req_1", "command": "screenshot"}"#;
+        let request: Request = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.id, "req_1");
+        assert_eq!(request.command, "screenshot");
+        assert_eq!(request.args, json!(null));
+    }
+
+    #[test]
+    fn request_parses_with_args() {
+        let json = r#"{"id": "req_2", "command": "execute_js", "args": {"script": "document.title"}}"#;
+        let request: Request = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.id, "req_2");
+        assert_eq!(request.command, "execute_js");
+        assert_eq!(request.args["script"], "document.title");
+    }
+
+    #[test]
+    fn request_parses_with_empty_args() {
+        let json = r#"{"id": "req_3", "command": "window_list", "args": {}}"#;
+        let request: Request = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.id, "req_3");
+        assert_eq!(request.command, "window_list");
+        assert!(request.args.is_object());
+    }
+
+    #[test]
+    fn request_parses_complex_args() {
+        let json = r##"{
+            "id": "req_4",
+            "command": "interact",
+            "args": {
+                "action": "click",
+                "selector": "#submit-btn",
+                "x": 100,
+                "y": 200
+            }
+        }"##;
+        let request: Request = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.command, "interact");
+        assert_eq!(request.args["action"], "click");
+        assert_eq!(request.args["selector"], "#submit-btn");
+        assert_eq!(request.args["x"], 100);
+        assert_eq!(request.args["y"], 200);
+    }
+
+    #[test]
+    fn request_fails_on_missing_id() {
+        let json = r#"{"command": "screenshot"}"#;
+        let result: Result<Request, _> = serde_json::from_str(json);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn request_fails_on_missing_command() {
+        let json = r#"{"id": "req_1"}"#;
+        let result: Result<Request, _> = serde_json::from_str(json);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn request_fails_on_invalid_json() {
+        let json = r#"{"id": "req_1", "command": screenshot"}"#;
+        let result: Result<Request, _> = serde_json::from_str(json);
+
+        assert!(result.is_err());
+    }
+
+    // Response serialization tests
+
+    #[test]
+    fn response_serializes_success() {
+        let response = Response {
+            id: "req_1".to_string(),
+            success: true,
+            data: Some(json!({"title": "My app"})),
+            error: None,
+            window_context: None,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["id"], "req_1");
+        assert_eq!(parsed["success"], true);
+        assert_eq!(parsed["data"]["title"], "My app");
+        assert!(parsed.get("error").is_none());
+        assert!(parsed.get("windowContext").is_none());
+    }
+
+    #[test]
+    fn response_serializes_error() {
+        let response = Response {
+            id: "req_2".to_string(),
+            success: false,
+            data: None,
+            error: Some("Element not found: .submit-btn".to_string()),
+            window_context: None,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["id"], "req_2");
+        assert_eq!(parsed["success"], false);
+        assert!(parsed.get("data").is_none());
+        assert_eq!(parsed["error"], "Element not found: .submit-btn");
+    }
+
+    #[test]
+    fn response_serializes_with_window_context() {
+        let response = Response {
+            id: "req_3".to_string(),
+            success: true,
+            data: Some(json!("screenshot data")),
+            error: None,
+            window_context: Some(WindowContext {
+                window_label: "main".to_string(),
+                total_windows: 2,
+            }),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["windowContext"]["windowLabel"], "main");
+        assert_eq!(parsed["windowContext"]["totalWindows"], 2);
+    }
+
+    #[test]
+    fn response_omits_none_fields() {
+        let response = Response {
+            id: "req_4".to_string(),
+            success: true,
+            data: None,
+            error: None,
+            window_context: None,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Only id and success should be present
+        assert!(parsed.get("data").is_none());
+        assert!(parsed.get("error").is_none());
+        assert!(parsed.get("windowContext").is_none());
+    }
+
+    // WindowContext serialization tests
+
+    #[test]
+    fn window_context_uses_camel_case() {
+        let context = WindowContext {
+            window_label: "settings".to_string(),
+            total_windows: 3,
+        };
+
+        let json = serde_json::to_string(&context).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Check camelCase field names
+        assert!(parsed.get("windowLabel").is_some());
+        assert!(parsed.get("totalWindows").is_some());
+        // Snake_case should not exist
+        assert!(parsed.get("window_label").is_none());
+        assert!(parsed.get("total_windows").is_none());
+    }
+
+    // Round-trip tests
+
+    #[test]
+    fn request_response_ids_match() {
+        let request_json = r#"{"id": "req_abc123", "command": "window_info"}"#;
+        let request: Request = serde_json::from_str(request_json).unwrap();
+
+        let response = Response {
+            id: request.id,
+            success: true,
+            data: Some(json!({"width": 800, "height": 600})),
+            error: None,
+            window_context: None,
+        };
+
+        let response_json = serde_json::to_string(&response).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&response_json).unwrap();
+
+        assert_eq!(parsed["id"], "req_abc123");
+    }
+
+    #[test]
+    fn request_handles_unicode() {
+        let json = r#"{
+            "id": "req_unicode",
+            "command": "execute_js",
+            "args": {"script": "console.log('\u4e2d\u6587')"}
+        }"#;
+        let request: Request = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.args["script"], "console.log('\u{4e2d}\u{6587}')");
+    }
+
+    #[test]
+    fn response_handles_large_data() {
+        let large_string = "x".repeat(100_000);
+        let response = Response {
+            id: "req_large".to_string(),
+            success: true,
+            data: Some(json!(large_string)),
+            error: None,
+            window_context: None,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.len() > 100_000);
+
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["data"].as_str().unwrap().len(), 100_000);
+    }
+}
