@@ -181,7 +181,8 @@ const handleDomSnapshot: ToolHandler = async (args) => {
     throw new Error(response.error ?? "DOM snapshot failed");
   }
 
-  return response.data as string;
+  const result = response.data;
+  return typeof result === "string" ? result : JSON.stringify(result, null, 2);
 };
 
 const handleExecuteJs: ToolHandler = async (args) => {
