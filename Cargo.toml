@@ -10,7 +10,9 @@ repository = "https://github.com/vdavid/tauri-mcp"
 authors = ["David Veszelovszki"]
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# Note: unsafe_code is "warn" not "forbid" because the macOS screenshot module
+# requires unsafe FFI calls to Objective-C APIs (objc2). See screenshot/macos.rs.
+unsafe_code = "warn"
 missing_docs = "warn"
 
 [workspace.lints.clippy]
