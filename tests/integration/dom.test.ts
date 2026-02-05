@@ -28,7 +28,7 @@ describe("tauri_dom_snapshot", () => {
 
     // Accessibility snapshot
     const a11yResponse = await sendCommand("dom_snapshot", {
-      snapshot_type: "accessibility",
+      type: "accessibility",
     });
     expect(a11yResponse.success).toBe(true);
     expect(typeof a11yResponse.data).toBe("string");
@@ -36,7 +36,7 @@ describe("tauri_dom_snapshot", () => {
 
     // Structure snapshot
     const structureResponse = await sendCommand("dom_snapshot", {
-      snapshot_type: "structure",
+      type: "structure",
     });
     expect(structureResponse.success).toBe(true);
     expect(typeof structureResponse.data).toBe("string");
@@ -44,7 +44,7 @@ describe("tauri_dom_snapshot", () => {
 
     // Structure snapshot scoped to body
     const scopedResponse = await sendCommand("dom_snapshot", {
-      snapshot_type: "structure",
+      type: "structure",
       selector: "body",
     });
     expect(scopedResponse.success).toBe(true);
@@ -58,7 +58,7 @@ describe("tauri_dom_snapshot", () => {
     }
 
     const response = await sendCommand("dom_snapshot", {
-      snapshot_type: "accessibility",
+      type: "accessibility",
       window_id: "nonexistent-window-12345",
     });
 

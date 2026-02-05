@@ -88,7 +88,7 @@ describe("tauri_interact", () => {
 
     const response = await sendCommand("interact", {
       action: "scroll",
-      scroll_y: 100,
+      scrollY: 100,
     });
     expect(response.success).toBe(true);
   });

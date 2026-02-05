@@ -28,7 +28,7 @@ describe("tauri_wait_for", () => {
 
     // Wait for existing selector
     const selectorResponse = await sendCommand("wait_for", {
-      wait_type: "selector",
+      type: "selector",
       value: "body",
       timeout: 5000,
     });
@@ -36,7 +36,7 @@ describe("tauri_wait_for", () => {
 
     // Wait for visible element
     const visibleResponse = await sendCommand("wait_for", {
-      wait_type: "visible",
+      type: "visible",
       value: "body",
       timeout: 5000,
     });
@@ -56,7 +56,7 @@ describe("tauri_wait_for", () => {
     });
 
     const response = await sendCommand("wait_for", {
-      wait_type: "text",
+      type: "text",
       value: "unique-wait-text-12345",
       timeout: 5000,
     });
@@ -75,7 +75,7 @@ describe("tauri_wait_for", () => {
     }
 
     const response = await sendCommand("wait_for", {
-      wait_type: "selector",
+      type: "selector",
       value: "#nonexistent-element-that-will-never-appear-12345",
       timeout: 1000,
     });
@@ -91,7 +91,7 @@ describe("tauri_wait_for", () => {
     }
 
     const response = await sendCommand("wait_for", {
-      wait_type: "selector",
+      type: "selector",
       value: "body",
       timeout: 1000,
       window_id: "nonexistent-window-12345",
