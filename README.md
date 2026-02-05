@@ -1,5 +1,7 @@
 # tauri-mcp
 
+NOTE: I've abandoned this project for now because I've found [MCP Server Tauri](https://github.com/hypothesi/mcp-server-tauri) to be good enough for my purposes.
+
 A Model Context Protocol (MCP) server that enables AI assistants to inspect, debug, and automate Tauri v2 applications. Provides screenshots, DOM inspection, JavaScript execution, and UI interaction capabilities.
 
 ## Overview
