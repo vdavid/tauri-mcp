@@ -103,14 +103,26 @@ if [ -d "packages/server" ] && [ -f "packages/server/package.json" ]; then
         echo -e "  ESLint...${YELLOW}skipped (run pnpm install first)${NC}"
     fi
 
-    if [ -f "node_modules/.bin/vitest" ]; then
-        run_check "Vitest" "npx vitest run" || true
-    else
-        echo -e "  Vitest...${YELLOW}skipped (run pnpm install first)${NC}"
-    fi
     cd "$PROJECT_ROOT"
 else
     echo -e "  TypeScript checks...${YELLOW}skipped (server not set up)${NC}"
+fi
+
+echo ""
+echo "┌────────────────────────────────────────────────────────────┐"
+echo "│ Integration tests                                          │"
+echo "└────────────────────────────────────────────────────────────┘"
+
+if [ -d "tests" ] && [ -f "tests/package.json" ]; then
+    cd tests
+    if [ -f "node_modules/.bin/vitest" ]; then
+        run_check "Integration tests" "npx vitest run" || true
+    else
+        echo -e "  Integration tests...${YELLOW}skipped (run pnpm install first)${NC}"
+    fi
+    cd "$PROJECT_ROOT"
+else
+    echo -e "  Integration tests...${YELLOW}skipped (tests not set up)${NC}"
 fi
 
 echo ""
