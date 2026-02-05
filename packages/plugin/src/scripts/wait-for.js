@@ -20,12 +20,30 @@ window.__tauriMcpWaitFor = async function(args) {
     if (result.satisfied) {
       return { success: true, message: result.message };
     }
+    if (result.error) {
+      return { error: result.error };
+    }
     await sleep(pollInterval);
   }
 
   return {
-    error: `Timeout after ${timeout}ms waiting for ${type}: ${value}`
+    error: getTimeoutMessage(type, value, timeout)
   };
+
+  function getTimeoutMessage(conditionType, conditionValue, timeoutMs) {
+    switch (conditionType) {
+      case 'selector':
+        return `Timeout after ${timeoutMs}ms waiting for '${conditionValue}' to appear`;
+      case 'text':
+        return `Timeout after ${timeoutMs}ms waiting for text '${conditionValue}' to appear`;
+      case 'visible':
+        return `Timeout after ${timeoutMs}ms waiting for '${conditionValue}' to become visible`;
+      case 'hidden':
+        return `Timeout after ${timeoutMs}ms waiting for '${conditionValue}' to disappear`;
+      default:
+        return `Timeout after ${timeoutMs}ms waiting for ${conditionType}: ${conditionValue}`;
+    }
+  }
 
   function checkCondition(conditionType, conditionValue) {
     switch (conditionType) {
@@ -62,7 +80,7 @@ window.__tauriMcpWaitFor = async function(args) {
       }
 
       default:
-        return { satisfied: false, error: `Unknown condition type: ${conditionType}` };
+        return { satisfied: false, error: `Unknown wait type '${conditionType}'. Use 'selector', 'text', 'visible', or 'hidden'.` };
     }
   }
 
