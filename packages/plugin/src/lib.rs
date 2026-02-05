@@ -27,9 +27,11 @@ mod commands;
 mod screenshot;
 mod websocket;
 
-use tauri::{plugin::TauriPlugin, Runtime};
+use tauri::{plugin::TauriPlugin, Manager, RunEvent, Runtime};
 use tokio::sync::oneshot;
 use tracing::info;
+
+pub use websocket::ShutdownHandle;
 
 /// Default WebSocket server port
 pub const DEFAULT_PORT: u16 = 9223;
@@ -110,9 +112,15 @@ fn build_plugin<R: Runtime>(port: u16, host: String) -> TauriPlugin<R> {
             let (ready_tx, ready_rx) = oneshot::channel();
             let host_for_log = host.clone();
 
+            // Create shutdown channel for graceful server termination
+            let (shutdown_handle, shutdown_rx) = ShutdownHandle::new();
+
+            // Store shutdown handle in app state for lifecycle management
+            app.manage(shutdown_handle);
+
             // Start WebSocket server in background
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = websocket::start_server(app_handle, port, &host, ready_tx).await {
+                if let Err(e) = websocket::start_server(app_handle, port, &host, ready_tx, shutdown_rx).await {
                     tracing::error!("WebSocket server error: {e}");
                 }
             });
@@ -127,6 +135,15 @@ fn build_plugin<R: Runtime>(port: u16, host: String) -> TauriPlugin<R> {
             });
 
             Ok(())
+        })
+        .on_event(|app, event| {
+            if matches!(event, RunEvent::Exit) {
+                // Trigger graceful shutdown when app exits
+                if let Some(handle) = app.try_state::<ShutdownHandle>() {
+                    info!("Triggering WebSocket server shutdown on app exit");
+                    handle.shutdown();
+                }
+            }
         })
         .js_init_script(include_str!("console_capture.js").to_string())
         .build()

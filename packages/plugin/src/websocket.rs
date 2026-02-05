@@ -10,7 +10,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{broadcast, oneshot, RwLock};
 use tokio::time::interval;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info};
@@ -70,12 +70,43 @@ pub struct ServerState<R: Runtime> {
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Handle for shutting down the WebSocket server gracefully.
+///
+/// When dropped or when `shutdown()` is called, signals the server to stop
+/// accepting new connections.
+#[derive(Clone)]
+pub struct ShutdownHandle {
+    sender: broadcast::Sender<()>,
+}
+
+impl ShutdownHandle {
+    /// Create a new shutdown handle and receiver pair.
+    #[must_use]
+    pub fn new() -> (Self, broadcast::Receiver<()>) {
+        let (sender, receiver) = broadcast::channel(1);
+        (Self { sender }, receiver)
+    }
+
+    /// Signal the server to shut down gracefully.
+    pub fn shutdown(&self) {
+        // Ignore error if no receivers (server already stopped)
+        let _ = self.sender.send(());
+    }
+}
+
+impl Default for ShutdownHandle {
+    fn default() -> Self {
+        Self::new().0
+    }
+}
+
 /// Start the WebSocket server
 pub async fn start_server<R: Runtime>(
     app: AppHandle<R>,
     port: u16,
     host: &str,
     ready_tx: oneshot::Sender<()>,
+    mut shutdown_rx: broadcast::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = format!("{host}:{port}");
     let listener = TcpListener::bind(&addr).await?;
@@ -87,20 +118,34 @@ pub async fn start_server<R: Runtime>(
     let _ = ready_tx.send(());
 
     loop {
-        match listener.accept().await {
-            Ok((stream, peer)) => {
-                let state = Arc::clone(&state);
-                tokio::spawn(async move {
-                    if let Err(e) = handle_connection(stream, peer, state).await {
-                        error!("Connection error from {peer}: {e}");
+        tokio::select! {
+            // Handle incoming connections
+            accept_result = listener.accept() => {
+                match accept_result {
+                    Ok((stream, peer)) => {
+                        let state = Arc::clone(&state);
+                        tokio::spawn(async move {
+                            if let Err(e) = handle_connection(stream, peer, state).await {
+                                error!("Connection error from {peer}: {e}");
+                            }
+                        });
                     }
-                });
+                    Err(e) => {
+                        error!("Failed to accept connection: {e}");
+                    }
+                }
             }
-            Err(e) => {
-                error!("Failed to accept connection: {e}");
+
+            // Handle shutdown signal
+            _ = shutdown_rx.recv() => {
+                info!("WebSocket server received shutdown signal, stopping accept loop");
+                break;
             }
         }
     }
+
+    info!("WebSocket server shut down gracefully");
+    Ok(())
 }
 
 async fn handle_connection<R: Runtime>(
