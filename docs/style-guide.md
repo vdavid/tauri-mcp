@@ -95,5 +95,5 @@ No Co-authored-by!
 
 ### Guides
 
-See [this diff](https://github.com/vdavid/cmdr/commit/13ad8f3#diff-795210f) before writing guides. This diff shows how
+See [this diff](https://github.com/getcmdr/cmdr/commit/13ad8f3#diff-795210f) before writing guides. This diff shows how
 we like our guides formatted. (Before: was AI-written. After: matching our standards for conciseness and clarity.)   
